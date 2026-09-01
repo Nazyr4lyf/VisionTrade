@@ -1,0 +1,38 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local Android SDK configuration
+local.properties
+
+# Logs
+*.log
+*.txt
+
+# IDE
+.idea/
+*.iml
+
+# APK files
+*.apk
+
+# Temporary backups
+backup-*/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local/config backups
+*.backup
+*.backup.*
+*.before-*
+
+# Development backup / temporary source files
+*.ui-backup
+*.phase7-backup
+*.broken
+*.backup-*
+*.pre-*
+*.working

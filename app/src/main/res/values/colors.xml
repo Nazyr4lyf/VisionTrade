@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- VisionTrade Brand Colors -->
+    <color name="brand_green">#00FF41</color>
+    <color name="brand_green_bright">#39FF14</color>
+    <color name="brand_blue">#0066FF</color>
+    <color name="brand_blue_bright">#1E90FF</color>
+    <color name="brand_cyan">#00D9FF</color>
+    <color name="brand_white">#FFFFFF</color>
+    
+    <!-- Trading Signal Colors -->
+    <color name="signal_buy">#00FF41</color>
+    <color name="signal_sell">#FF0040</color>
+    <color name="signal_wait">#FFB800</color>
+    <color name="signal_neutral">#808080</color>
+    
+    <!-- Chart Colors -->
+    <color name="candle_bullish">#00FF41</color>
+    <color name="candle_bearish">#FF0040</color>
+    <color name="ema_20">#39FF14</color>
+    <color name="ema_50">#0066FF</color>
+    
+    <!-- UI Colors -->
+    <color name="background_dark">#0A0E27</color>
+    <color name="background_darker">#050810</color>
+    <color name="surface">#1A1F3A</color>
+    <color name="surface_variant">#2A3050</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B0B0B0</color>
+    <color name="text_tertiary">#808080</color>
+    <color name="border">#2A3050</color>
+    <color name="divider">#1A2540</color>
+    
+    <!-- Status Colors -->
+    <color name="success">#00FF41</color>
+    <color name="error">#FF0040</color>
+    <color name="warning">#FFB800</color>
+    <color name="info">#0066FF</color>
+    
+    <!-- Legacy colors (for Material Design) -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="icon_background">#050810</color>
+</resources>

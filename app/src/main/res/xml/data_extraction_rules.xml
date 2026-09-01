@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <domain-config filesystemOnly="true">
+        <domain name="shared_prefs" />
+        <domain name="database" />
+        <domain name="cache" />
+    </domain-config>
+</data-extraction-rules>

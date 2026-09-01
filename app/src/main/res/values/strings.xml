@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VisionTrade AI Assistant</string>
+    <string name="app_tagline">See the Market. Follow the Strategy.</string>
+    
+    <!-- Main Screen -->
+    <string name="main_title">VisionTrade</string>
+    <string name="main_subtitle">AI Assistant</string>
+    <string name="btn_analyze_screenshot">Analyze Screenshot</string>
+    <string name="btn_scan_camera">Scan Camera</string>
+    <string name="btn_manual_data">Manual Data</string>
+    <string name="btn_risk_calculator">Risk Calculator</string>
+    <string name="btn_flipping_simulator">Account Growth</string>
+    <string name="btn_history">Analysis History</string>
+    <string name="btn_settings">Settings</string>
+    
+    <!-- Analysis Results -->
+    <string name="signal_buy">BUY</string>
+    <string name="signal_sell">SELL</string>
+    <string name="signal_wait">WAIT</string>
+    <string name="confidence_high">HIGH</string>
+    <string name="confidence_medium">MEDIUM</string>
+    <string name="confidence_low">LOW</string>
+    
+    <!-- Trends -->
+    <string name="trend_bullish">Bullish</string>
+    <string name="trend_bearish">Bearish</string>
+    <string name="trend_ranging">Ranging</string>
+    <string name="trend_unknown">Unknown</string>
+    
+    <!-- Analysis Screen -->
+    <string name="analysis_signal">Signal</string>
+    <string name="analysis_confidence">Confidence</string>
+    <string name="analysis_trend">Trend</string>
+    <string name="analysis_entry_zone">Entry Zone</string>
+    <string name="analysis_support">Support</string>
+    <string name="analysis_resistance">Resistance</string>
+    <string name="analysis_reason">Reason</string>
+    <string name="analysis_details">Analysis Details</string>
+    
+    <!-- Indicators -->
+    <string name="indicator_ema20">EMA 20</string>
+    <string name="indicator_ema50">EMA 50</string>
+    <string name="indicator_rsi14">RSI 14</string>
+    <string name="indicator_adx14">ADX 14</string>
+    
+    <!-- Risk Calculator -->
+    <string name="risk_account_balance">Account Balance</string>
+    <string name="risk_risk_percentage">Risk %</string>
+    <string name="risk_entry_price">Entry Price</string>
+    <string name="risk_stop_loss">Stop Loss</string>
+    <string name="risk_take_profit">Take Profit</string>
+    <string name="risk_symbol">Symbol</string>
+    <string name="risk_amount">Risk Amount</string>
+    <string name="risk_ratio">Risk/Reward</string>
+    <string name="risk_position_size">Position Size</string>
+    <string name="btn_calculate">Calculate</string>
+    
+    <!-- Simulator -->
+    <string name="sim_starting_balance">Starting Balance</string>
+    <string name="sim_risk_per_trade">Risk per Trade %</string>
+    <string name="sim_win_rate">Win Rate %</string>
+    <string name="sim_reward_ratio">Reward Ratio</string>
+    <string name="sim_num_trades">Number of Trades</string>
+    <string name="sim_compounding">Enable Compounding</string>
+    <string name="sim_final_balance">Final Balance</string>
+    <string name="sim_profit">Total Profit</string>
+    <string name="sim_return">Return %</string>
+    
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_support_tolerance">Support/Resistance Tolerance %</string>
+    <string name="settings_lookback_candles">Lookback Candles</string>
+    <string name="settings_clear_history">Clear History</string>
+    <string name="settings_about">About</string>
+    
+    <!-- Messages -->
+    <string name="msg_image_unclear">Image unclear - unable to reliably extract required data.</string>
+    <string name="msg_no_data">No data available for analysis.</string>
+    <string name="msg_analyzing">Analyzing chart...</string>
+    <string name="msg_success">Analysis complete</string>
+    <string name="msg_error">An error occurred</string>
+    <string name="msg_no_history">No analysis history yet</string>
+    
+    <!-- About -->
+    <string name="about_version">Version 1.0.0</string>
+    <string name="about_description">VisionTrade AI Assistant is a technical analysis tool for personal Forex trading education and experimentation.</string>
+    <string name="about_disclaimer">This application is for educational purposes. It does not guarantee trading results and does not automatically execute trades.</string>
+    <string name="about_privacy">All analysis is performed locally. No data is transmitted externally.</string>
+    
+    <!-- Errors -->
+    <string name="error_camera">Camera access required</string>
+    <string name="error_storage">Storage permission required</string>
+    <string name="error_invalid_input">Invalid input provided</string>
+</resources>
