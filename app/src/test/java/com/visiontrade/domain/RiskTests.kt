@@ -64,6 +64,29 @@ class RiskTests {
     }
 
     @Test
+    fun testPhase9DefaultSimulatorExactResult() {
+        val input = SimulationInput(
+            startingBalance = 10000.0,
+            riskPercentage = 2.0,
+            winRate = 0.55,
+            rewardRatio = 1.5,
+            numberOfTrades = 100,
+            compounding = true
+        )
+
+        val result = simulator.simulate(input)
+
+        // Phase 9: exact default simulator verification
+        assertEquals(10000.0, result.startingBalance, 0.01)
+        assertEquals(20474.85, result.finalBalance, 0.01)
+        assertEquals(10474.85, result.totalProfit, 0.01)
+        assertEquals(104.75, result.returnPercentage, 0.01)
+        assertEquals(55, result.winCount)
+        assertEquals(45, result.lossCount)
+        assertTrue(result.finalBalance > result.startingBalance)
+    }
+
+    @Test
     fun testSimulationWithoutCompounding() {
         val input = SimulationInput(
             startingBalance = 10000.0,

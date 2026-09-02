@@ -25,7 +25,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var riskViewModel: RiskViewModel
 
     private var currentScreen by mutableStateOf("welcome")
-    private var historyState by mutableStateOf<List<AnalysisHistoryEntry>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,9 +54,14 @@ class MainActivity : ComponentActivity() {
         analysisViewModel.loadHistory()
 
         setContent {
-            VisionTradeTheme {
+VisionTradeTheme {
 
-                when (currentScreen) {
+                val signal by analysisViewModel.signalState.collectAsState()
+            val isAnalysisLoading by analysisViewModel.isLoading.collectAsState()
+            val analysisError by analysisViewModel.errorMessage.collectAsState()
+                val history by analysisViewModel.historyState.collectAsState()
+
+            when (currentScreen) {
 "welcome" -> WelcomeScreen(
     onGetStarted = {
         currentScreen = "main"
@@ -89,7 +93,6 @@ class MainActivity : ComponentActivity() {
                         },
 
                         onHistory = {
-                            historyState = analysisViewModel.historyState.value
                             currentScreen = "history"
                         },
 
@@ -107,8 +110,6 @@ class MainActivity : ComponentActivity() {
                         onAnalysisComplete = { analysis ->
 
                             analysisViewModel.analyzeChart(analysis)
-
-                            currentScreen = "result"
                         },
 
                         onBackClick = {
@@ -125,8 +126,6 @@ class MainActivity : ComponentActivity() {
                         onAnalysisComplete = { analysis ->
 
                             analysisViewModel.analyzeChart(analysis)
-
-                            currentScreen = "result"
                         },
 
                         onBackClick = {
@@ -143,8 +142,6 @@ class MainActivity : ComponentActivity() {
                         onAnalysisComplete = { analysis ->
 
                             analysisViewModel.analyzeChart(analysis)
-
-                            currentScreen = "result"
                         },
 
                         onBackClick = {
@@ -156,55 +153,25 @@ class MainActivity : ComponentActivity() {
                     // RESULT
                     // =========================================
 
-                    "result" -> {
+                     "result" -> {
+                          if (signal != null) {
+                              AnalysisResultScreen(
+                                  signal = signal!!,
+                                  onBackClick = {
+                                      currentScreen = "main"
+                                  }
+                              )
+                          } else if (isAnalysisLoading) {
+                              androidx.compose.material3.CircularProgressIndicator()
+                          } else if (analysisError != null) {
+                              androidx.compose.material3.Text(
+                                  text = analysisError ?: "Analysis error"
+                              )
+                          } else {
+                              androidx.compose.material3.CircularProgressIndicator()
+                          }
+                      }
 
-                        val signal = analysisViewModel.signalState.value
-
-                        if (signal != null) {
-
-                            AnalysisResultScreen(
-                                signal = signal,
-
-                                onBackClick = {
-                                    currentScreen = "main"
-                                }
-                            )
-
-                        } else {
-
-                            MainScreen(
-                                onAnalyzeScreenshot = {
-                                    currentScreen = "screenshot"
-                                },
-
-                                onScanCamera = {
-                                    currentScreen = "camera"
-                                },
-
-                                onManualData = {
-                                    currentScreen = "manual"
-                                },
-
-                                onRiskCalculator = {
-                                    currentScreen = "risk"
-                                },
-
-                                onFlippingSimulator = {
-                                    currentScreen = "simulator"
-                                },
-
-                                onHistory = {
-                                    historyState =
-                                        analysisViewModel.historyState.value
-                                    currentScreen = "history"
-                                },
-
-                                onSettings = {
-                                    currentScreen = "settings"
-                                }
-                            )
-                        }
-                    }
 
                     // =========================================
                     // RISK CALCULATOR
@@ -221,6 +188,7 @@ class MainActivity : ComponentActivity() {
                     // =========================================
 
                     "simulator" -> SimulatorScreen(
+                        riskViewModel = riskViewModel,
                         onBackClick = {
                             currentScreen = "main"
                         }
@@ -232,12 +200,9 @@ class MainActivity : ComponentActivity() {
 
                     "history" -> {
 
-                        historyState =
-                            analysisViewModel.historyState.value
-
                         HistoryScreen(
 
-                            history = historyState,
+                            history = history,
 
                             onBackClick = {
                                 currentScreen = "main"
@@ -246,16 +211,11 @@ class MainActivity : ComponentActivity() {
                             onDeleteEntry = { entry ->
 
                                 analysisViewModel.deleteHistoryEntry(entry)
-
-                                historyState =
-                                    analysisViewModel.historyState.value
                             },
 
                             onClearAll = {
 
                                 analysisViewModel.clearHistory()
-
-                                historyState = emptyList()
                             }
                         )
                     }
@@ -273,8 +233,6 @@ class MainActivity : ComponentActivity() {
                         onClearHistory = {
 
                             analysisViewModel.clearHistory()
-
-                            historyState = emptyList()
                         }
                     )
 
@@ -305,8 +263,6 @@ class MainActivity : ComponentActivity() {
                         },
 
                         onHistory = {
-                            historyState =
-                                analysisViewModel.historyState.value
                             currentScreen = "history"
                         },
 

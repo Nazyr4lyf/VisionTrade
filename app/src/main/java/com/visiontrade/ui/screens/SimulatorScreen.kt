@@ -17,10 +17,12 @@ import com.visiontrade.domain.risk.SimulationInput
 import com.visiontrade.domain.risk.SimulationResult
 import com.visiontrade.ui.components.*
 import com.visiontrade.ui.theme.VisionTradeColors
+import com.visiontrade.ui.viewmodel.RiskViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SimulatorScreen(
+    riskViewModel: RiskViewModel,
     onBackClick: () -> Unit
 ) {
     var startBalance by remember { mutableStateOf("10000") }
@@ -29,8 +31,8 @@ fun SimulatorScreen(
     var rewardRatio by remember { mutableStateOf("1.5") }
     var numTrades by remember { mutableStateOf("100") }
     var compounding by remember { mutableStateOf(true) }
-    var result by remember { mutableStateOf<SimulationResult?>(null) }
-    var isSimulating by remember { mutableStateOf(false) }
+    val result by riskViewModel.simulationResult.collectAsState()
+    val simulationError by riskViewModel.simulationError.collectAsState()
 
     Column(
         modifier = Modifier
@@ -151,13 +153,37 @@ fun SimulatorScreen(
                 text = "Run Simulation",
                 onClick = {
                     if (validateSimInputs(startBalance, riskPercent, winRate, rewardRatio, numTrades)) {
-                        isSimulating = true
-                        // In real app, use SimulationEngine
-                        isSimulating = false
+                        riskViewModel.runSimulation(
+                            SimulationInput(
+                                startingBalance = startBalance.toDouble(),
+                                riskPercentage = riskPercent.toDouble(),
+                                winRate = winRate.toDouble() / 100.0,
+                                rewardRatio = rewardRatio.toDouble(),
+                                numberOfTrades = numTrades.toInt(),
+                                compounding = compounding
+                            )
+                        )
                     }
                 },
-                isLoading = isSimulating
+                isLoading = false
             )
+
+            simulationError?.let { error ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = VisionTradeColors.signalSell.copy(alpha = 0.15f)
+                    ),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = error,
+                        color = VisionTradeColors.signalSell,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
 
             // Results
             if (result != null) {

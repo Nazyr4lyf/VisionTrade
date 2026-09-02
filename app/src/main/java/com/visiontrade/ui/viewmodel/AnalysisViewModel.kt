@@ -115,31 +115,33 @@ class AnalysisViewModel(
     }
 
     // ============= HISTORY MANAGEMENT =============
-    private fun saveToHistory(analysis: ChartAnalysis, signal: TradingSignal) {
-        viewModelScope.launch {
-            try {
-                val entry = AnalysisHistoryEntry(
-                    symbol = analysis.symbol ?: "UNKNOWN",
-                    timeframe = analysis.timeframe?.label ?: "UNKNOWN",
-                    signal = signal.signal.name,
-                    confidence = signal.confidence.name,
-                    trend = signal.trend.name,
-                    reason = signal.reasons.joinToString(" | "),
-                    entryZone = signal.entryZone?.let { 
-                        "%.4f - %.4f".format(it.low, it.high) 
-                    } ?: "N/A",
-                    support = signal.support?.let { 
-                        "%.4f - %.4f".format(it.low, it.high) 
-                    } ?: "N/A",
-                    resistance = signal.resistance?.let { 
-                        "%.4f - %.4f".format(it.low, it.high) 
-                    } ?: "N/A",
-                    timestamp = LocalDateTime.now()
-                )
-                repository.save(entry)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to save history: ${e.message}"
-            }
+    private suspend fun saveToHistory(
+        analysis: ChartAnalysis,
+        signal: TradingSignal
+    ) {
+        try {
+            val entry = AnalysisHistoryEntry(
+                symbol = analysis.symbol ?: "UNKNOWN",
+                timeframe = analysis.timeframe?.label ?: "UNKNOWN",
+                signal = signal.signal.name,
+                confidence = signal.confidence.name,
+                trend = signal.trend.name,
+                reason = signal.reasons.joinToString(" | "),
+                entryZone = signal.entryZone?.let {
+                    "%.4f - %.4f".format(it.low, it.high)
+                } ?: "N/A",
+                support = signal.support?.let {
+                    "%.4f - %.4f".format(it.low, it.high)
+                } ?: "N/A",
+                resistance = signal.resistance?.let {
+                    "%.4f - %.4f".format(it.low, it.high)
+                } ?: "N/A",
+                timestamp = LocalDateTime.now()
+            )
+
+            repository.save(entry)
+        } catch (e: Exception) {
+            _errorMessage.value = "Failed to save history: ${e.message}"
         }
     }
 

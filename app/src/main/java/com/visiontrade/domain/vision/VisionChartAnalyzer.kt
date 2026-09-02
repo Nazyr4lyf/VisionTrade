@@ -48,6 +48,19 @@ class VisionChartAnalyzer(
                 .average()
                 .coerceIn(0.0, 1.0)
 
+        /*
+         * Multi-timeframe analysis is only valid when ALL three
+         * timeframe extractions independently pass the same gate.
+         *
+         * We also track the weakest timeframe confidence so that
+         * one strong screenshot cannot hide one weak screenshot.
+         */
+        val weakestConfidence =
+            extractions
+                .minOfOrNull { it.confidence }
+                ?.coerceIn(0.0, 1.0)
+                ?: 0.0
+
         val usableCount =
             extractions.count {
                 it.candles.size >= MIN_REQUIRED_CANDLES &&
@@ -80,7 +93,7 @@ class VisionChartAnalyzer(
                 bullishEngulfing = null,
                 bearishEngulfing = null,
                 imageQuality = quality,
-                dataCompleteness = averageConfidence
+                dataCompleteness = weakestConfidence
             )
         }
 
@@ -105,15 +118,20 @@ class VisionChartAnalyzer(
         val patterns =
             detectPatterns(m15.candles)
 
+        /*
+         * Overall image quality is constrained by the weakest
+         * timeframe. This prevents a strong M15/H1/H4 screenshot
+         * from masking a poor timeframe extraction.
+         */
         val quality =
             when {
-                averageConfidence >= 0.85 ->
+                weakestConfidence >= 0.85 ->
                     ImageQuality.EXCELLENT
 
-                averageConfidence >= 0.72 ->
+                weakestConfidence >= 0.72 ->
                     ImageQuality.GOOD
 
-                averageConfidence >= 0.60 ->
+                weakestConfidence >= 0.60 ->
                     ImageQuality.FAIR
 
                 else ->
@@ -129,7 +147,11 @@ class VisionChartAnalyzer(
             bullishEngulfing = patterns.first,
             bearishEngulfing = patterns.second,
             imageQuality = quality,
-            dataCompleteness = averageConfidence
+            /*
+             * Completeness follows the weakest timeframe because
+             * all three timeframes are required for a valid decision.
+             */
+            dataCompleteness = weakestConfidence
         )
     }
 
