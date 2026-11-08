@@ -1,0 +1,61 @@
+export function formatStrategyAlert(signal, riskLevels = null, paperApproval = null, approvalConfigured = false) {
+  if (!signal || !["BUY", "SELL"].includes(signal.action)) throw new Error("Only actionable strategy signals can be formatted");
+  const side = signal.action === "BUY" ? "LONG" : "SHORT";
+  const price = Number(signal.referencePrice);
+  if (!Number.isFinite(price) || price <= 0) throw new Error("Signal reference price is invalid");
+  const zone = signal.action === "BUY" ? signal.supportZone : signal.resistanceZone;
+  const zoneText = zone && Number.isFinite(Number(zone.low)) && Number.isFinite(Number(zone.high))
+    ? `${zone.low} – ${zone.high}` : "not available";
+  const riskLines = riskLevels?.accepted
+    ? [
+        `Candidate stop-loss: ${riskLevels.stopLossPrice}`,
+        `Candidate take-profit: ${riskLevels.takeProfitPrice}`,
+        `Gross risk/reward: ${Number(riskLevels.grossRiskReward).toFixed(2)}R`,
+        "Gross R only; net 1% risk approval is reported separately below."
+      ]
+    : [`Stop/target validation: REJECTED — ${riskLevels?.rejectionReason ?? "not calculated"}`];
+  return [
+    "🔔 NAXYUS VISIONTRADE — STRATEGY SIGNAL",
+    `${signal.symbol} | ${signal.marketType} | ${side}`,
+    `Reference price: ${price}`,
+    `Relevant confirmed zone: ${zoneText}`,
+    "",
+    "Strategy confirmations:",
+    ...signal.reasons.map(reason => `• ${reason}`),
+    "",
+    "Risk analysis:",
+    ...riskLines,
+    "",
+    paperApproval?.approved
+      ? [
+          "PAPER-TRADE APPROVAL: APPROVED (simulation candidate only)",
+          "Risk budget: " + paperApproval.risk.riskBudget,
+          "Quantity: " + paperApproval.paperTradeCandidate.quantity,
+          "Estimated loss at stop: " + paperApproval.risk.estimatedLossAtStop,
+          "Net risk/reward: " + paperApproval.risk.netRiskReward.toFixed(2) + "R"
+        ].join("\n")
+      : approvalConfigured
+        ? "PAPER-TRADE APPROVAL: REJECTED — " + (paperApproval?.rejectionReason ?? "risk gate rejected")
+        : "PAPER-TRADE APPROVAL: NOT CONFIGURED — verified equity and market costs are required.",
+    "SIGNAL ONLY unless explicitly marked as an approved paper-trade candidate.",
+    "No exchange order has been placed. Live trading is disabled."
+  ].join("\n");
+}
+
+export class SignalAlertDeduplicator {
+  constructor() { this.lastAlertByKey = new Map(); }
+  fingerprint(signal) {
+    if (!signal || !["BUY", "SELL"].includes(signal.action)) return null;
+    const candleTime = Number(signal.signalCandleTimestampMillis ?? signal.evaluatedAtMillis);
+    if (!Number.isSafeInteger(candleTime) || candleTime <= 0) return null;
+    return { key: `${signal.marketType}:${signal.symbol}`, value: `${signal.action}:${candleTime}` };
+  }
+  hasSent(signal) {
+    const item = this.fingerprint(signal);
+    return item ? this.lastAlertByKey.get(item.key) === item.value : false;
+  }
+  markSent(signal) {
+    const item = this.fingerprint(signal);
+    if (item) this.lastAlertByKey.set(item.key, item.value);
+  }
+}

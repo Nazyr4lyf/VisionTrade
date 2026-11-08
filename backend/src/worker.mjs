@@ -1,0 +1,292 @@
+import { BybitClient } from "./providers/bybit-client.mjs";
+import { CoinGeckoClient } from "./providers/coingecko-client.mjs";
+import { mapWithConcurrency } from "./utils/concurrency.mjs";
+import { SupabasePaperTradeStore } from "./paper/supabase-paper-trade-store.mjs";
+import { PaperTradeLedger } from "./paper/paper-trade-ledger.mjs";
+import { PaperTradingPipeline } from "./paper/paper-trading-pipeline.mjs";
+import { OpenPositionMonitor } from "./paper/open-position-monitor.mjs";
+import { TelegramBot } from "./telegram/telegram-bot.mjs";
+import { TelegramNotifier } from "./notifications/telegram-notifier.mjs";
+import { ScalpingStrategyEngine } from "./strategy/scalping-strategy.mjs";
+import { SignalAlertDeduplicator, formatStrategyAlert } from "./strategy/signal-alerts.mjs";
+import { calculateIndicators } from "./strategy/indicators.mjs";
+import { StopTargetEngine } from "./risk/stop-target-engine.mjs";
+import { PaperTradeApprovalEngine } from "./risk/paper-trade-approval-engine.mjs";
+
+const intervalMs = Number(process.env.SCAN_INTERVAL_MS ?? 60_000);
+const discoveryIntervalMs = Number(process.env.DISCOVERY_INTERVAL_MS ?? 21_600_000);
+const minimumTurnoverUsd = Number(process.env.MIN_TURNOVER_24H_USD ?? 5_000_000);
+const scanConcurrency = Number(process.env.SCAN_CONCURRENCY ?? 3);
+const paperPositionMonitoringEnabled = process.env.PAPER_POSITION_MONITORING_ENABLED === "true";
+
+function requiredNonNegativeEnv(name) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") {
+    throw new Error(`${name} is required when paper position monitoring is enabled`);
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a non-negative number`);
+  return value;
+}
+
+if (!Number.isFinite(intervalMs) || intervalMs < 15_000) throw new Error("SCAN_INTERVAL_MS must be at least 15000");
+if (!Number.isFinite(discoveryIntervalMs) || discoveryIntervalMs < 60_000) throw new Error("DISCOVERY_INTERVAL_MS must be at least 60000");
+if (!Number.isFinite(minimumTurnoverUsd) || minimumTurnoverUsd < 0) throw new Error("MIN_TURNOVER_24H_USD must be non-negative");
+if (!Number.isInteger(scanConcurrency) || scanConcurrency < 1 || scanConcurrency > 10) throw new Error("SCAN_CONCURRENCY must be an integer between 1 and 10");
+
+const bybit = new BybitClient();
+const coinGecko = new CoinGeckoClient({ apiKey: process.env.COINGECKO_DEMO_API_KEY });
+const strategyEngine = new ScalpingStrategyEngine();
+const alertDeduplicator = new SignalAlertDeduplicator();
+const stopTargetEngine = new StopTargetEngine();
+const paperApprovalEngine = new PaperTradeApprovalEngine();
+
+function optionalRate(name) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value >= 1) throw new Error(name + " must be a rate from 0 to less than 1");
+  return value;
+}
+function optionalEquity() {
+  const raw = process.env.PAPER_ACCOUNT_EQUITY;
+  if (raw === undefined || raw.trim() === "") return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) throw new Error("PAPER_ACCOUNT_EQUITY must be positive");
+  return value;
+}
+const paperEquity = optionalEquity();
+const paperCosts = {
+  SPOT: {
+    entryFeeRate: optionalRate("PAPER_SPOT_ENTRY_FEE_RATE"),
+    exitFeeRate: optionalRate("PAPER_SPOT_EXIT_FEE_RATE"),
+    slippageRatePerSide: optionalRate("PAPER_SPOT_SLIPPAGE_RATE_PER_SIDE"),
+    fundingRateAllowance: 0
+  },
+  USDT_PERPETUAL: {
+    entryFeeRate: optionalRate("PAPER_PERPETUAL_ENTRY_FEE_RATE"),
+    exitFeeRate: optionalRate("PAPER_PERPETUAL_EXIT_FEE_RATE"),
+    slippageRatePerSide: optionalRate("PAPER_PERPETUAL_SLIPPAGE_RATE_PER_SIDE"),
+    fundingRateAllowance: optionalRate("PAPER_PERPETUAL_FUNDING_RATE_ALLOWANCE")
+  }
+};
+function costsConfigured(marketType) {
+  return paperEquity !== null && Object.values(paperCosts[marketType] ?? {}).every(value => value !== null);
+}
+let notifier = null;
+let telegramBot = null;
+let positionMonitor = null;
+
+if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+  notifier = new TelegramNotifier({
+    botToken: process.env.TELEGRAM_BOT_TOKEN,
+    chatId: process.env.TELEGRAM_CHAT_ID
+  });
+  telegramBot = new TelegramBot();
+} else if (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_CHAT_ID) {
+  throw new Error("Set both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to enable Telegram");
+}
+
+if (paperPositionMonitoringEnabled) {
+  const store = new SupabasePaperTradeStore();
+  const ledger = new PaperTradeLedger({ store });
+  const pipeline = new PaperTradingPipeline({ enabled: true, ledger });
+  positionMonitor = new OpenPositionMonitor({
+    ledger, pipeline, bybit,
+    spotCosts: {
+      feeRate: requiredNonNegativeEnv("PAPER_SPOT_FEE_RATE"),
+      slippageBps: requiredNonNegativeEnv("PAPER_SPOT_SLIPPAGE_BPS")
+    },
+    maxCandleAgeMs: Number(process.env.PAPER_MAX_CANDLE_AGE_MS ?? 180_000),
+    concurrency: Number(process.env.PAPER_MONITOR_CONCURRENCY ?? 3)
+  });
+}
+
+let stopping = false;
+let lastDiscoveryAt = 0;
+let discovery = [];
+let lastScanAt = null;
+let lastScanPairs = 0;
+let lastSignals = 0;
+let recentSignals = [];
+let telegramTask = null;
+
+async function refreshDiscovery() {
+  const [spot, perpetual] = await Promise.all([
+    bybit.getAllUsdtInstruments("spot"),
+    bybit.getAllUsdtInstruments("linear")
+  ]);
+  const [spotTickers, perpetualTickers, coins] = await Promise.all([
+    bybit.getTickers("spot"), bybit.getTickers("linear"), coinGecko.getUsdtMarketDiscovery()
+  ]);
+  const coinSymbols = new Set(coins.map(coin => coin.symbol));
+  const spotTurnover = new Map(spotTickers.map(ticker => [ticker.symbol, Number(ticker.turnover24h)]));
+  const perpetualTurnover = new Map(perpetualTickers.map(ticker => [ticker.symbol, Number(ticker.turnover24h)]));
+  discovery = [
+    ...spot.map(item => ({ ...item, market: "spot", turnover24hUsd: spotTurnover.get(item.symbol) ?? 0 })),
+    ...perpetual.map(item => ({ ...item, market: "linear", turnover24hUsd: perpetualTurnover.get(item.symbol) ?? 0 }))
+  ].filter(item =>
+    coinSymbols.has(item.symbol.replace(/USDT$/, "")) &&
+    Number.isFinite(item.turnover24hUsd) && item.turnover24hUsd >= minimumTurnoverUsd
+  ).sort((a, b) => b.turnover24hUsd - a.turnover24hUsd);
+
+  lastDiscoveryAt = Date.now();
+  console.info(JSON.stringify({
+    event: "discovery_refreshed", eligibleMarketPairs: discovery.length,
+    at: new Date(lastDiscoveryAt).toISOString()
+  }));
+}
+
+async function scanCycle() {
+  if (Date.now() - lastDiscoveryAt >= discoveryIntervalMs) await refreshDiscovery();
+  const sample = discovery.slice(0, Number(process.env.MAX_MARKET_PAIRS ?? 30));
+  const results = await mapWithConcurrency(sample, scanConcurrency, async item => {
+    const [oneMinute, fiveMinute] = await Promise.all([
+      bybit.getKlines(item.market, item.symbol, "1", { limit: 120 }),
+      bybit.getKlines(item.market, item.symbol, "5", { limit: 120 })
+    ]);
+    const receivedAt = Date.now();
+    const signal = strategyEngine.analyze({
+      symbol: item.symbol,
+      marketType: item.marketType,
+      oneMinuteCandles: oneMinute,
+      fiveMinuteCandles: fiveMinute,
+      marketDataReceivedAtMillis: receivedAt,
+      nowMillis: receivedAt
+    });
+    signal.signalCandleTimestampMillis = oneMinute.filter(candle => candle.isClosed).at(-1)?.timestampMillis;
+    let riskLevels = null;
+    let paperApproval = null;
+    if (["BUY", "SELL"].includes(signal.action)) {
+      const indicators = calculateIndicators(fiveMinute);
+      riskLevels = stopTargetEngine.build({
+        signal, entryPrice: signal.referencePrice, atr: indicators.atr14,
+        supportZone: signal.supportZone, resistanceZone: signal.resistanceZone,
+        priceTick: item.priceTick
+      });
+      if (costsConfigured(signal.marketType)) {
+        paperApproval = paperApprovalEngine.evaluate({
+          signal, atr: indicators.atr14, instrument: item,
+          equity: paperEquity, costs: paperCosts[signal.marketType]
+        });
+      }
+      recentSignals.unshift({
+        symbol: signal.symbol, marketType: signal.marketType, action: signal.action,
+        referencePrice: signal.referencePrice, evaluatedAtMillis: signal.signalCandleTimestampMillis,
+        riskAccepted: riskLevels.accepted, grossRiskReward: riskLevels.grossRiskReward,
+        stopLossPrice: riskLevels.stopLossPrice, takeProfitPrice: riskLevels.takeProfitPrice,
+        riskReason: riskLevels.rejectionReason, paperApproved: paperApproval?.approved ?? false,
+        paperApprovalReason: paperApproval?.rejectionReason ?? "Paper account equity and verified market costs are not configured.",
+        paperQuantity: paperApproval?.paperTradeCandidate?.quantity ?? null,
+        paperNetRiskReward: paperApproval?.risk?.netRiskReward ?? null
+      });
+      recentSignals = recentSignals.slice(0, 10);
+    }
+    let alertSent = false;
+    if (notifier && ["BUY", "SELL"].includes(signal.action) && !alertDeduplicator.hasSent(signal)) {
+      try {
+        await notifier.sendMessage(formatStrategyAlert(signal, riskLevels, paperApproval, costsConfigured(signal.marketType)));
+        alertDeduplicator.markSent(signal);
+        alertSent = true;
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: "telegram_signal_delivery_failed",
+          symbol: item.symbol, marketType: item.marketType, message: error.message
+        }));
+      }
+    }
+    return {
+      symbol: item.symbol, marketType: item.marketType,
+      oneMinuteClosed: oneMinute.filter(candle => candle.isClosed).length,
+      fiveMinuteClosed: fiveMinute.filter(candle => candle.isClosed).length,
+      action: signal.action, alertSent
+    };
+  });
+
+  const fulfilled = results.filter(result => result.status === "fulfilled").map(result => result.value);
+  const successful = fulfilled.length;
+  lastSignals = fulfilled.filter(item => item.action !== "NO_TRADE").length;
+  lastScanAt = new Date().toISOString();
+  lastScanPairs = sample.length;
+  console.info(JSON.stringify({
+    event: "strategy_scan_cycle",
+    marketPairsRequested: sample.length,
+    scanConcurrency,
+    marketPairsSucceeded: successful,
+    marketPairsFailed: results.length - successful,
+    actionableSignals: lastSignals,
+    telegramAlertsSent: fulfilled.filter(item => item.alertSent).length,
+    at: lastScanAt
+  }));
+}
+
+function waitForNextCycle(milliseconds) {
+  return new Promise(resolve => {
+    const finish = () => {
+      clearTimeout(timer);
+      process.off("SIGTERM", finish);
+      process.off("SIGINT", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, milliseconds);
+    process.once("SIGTERM", finish);
+    process.once("SIGINT", finish);
+  });
+}
+
+async function main() {
+  console.info(JSON.stringify({
+    event: "worker_started",
+    mode: "LIVE_MARKET_MONITORING",
+    strategy: "RANGE_SCALPING_5M_CONTEXT_1M_CONFIRMATION",
+    telegramEnabled: Boolean(notifier),
+    paperRiskApprovalConfigured: costsConfigured("SPOT") || costsConfigured("USDT_PERPETUAL"),
+    paperPositionMonitoringEnabled,
+    paperPositionEntryEnabled: false,
+    liveTrading: false
+  }));
+  if (telegramBot) {
+    telegramTask = telegramBot.start(() => ({
+      running: !stopping,
+      mode: "LIVE_MARKET_MONITORING",
+      lastScanAt,
+      lastScanPairs,
+      actionableSignals: lastSignals,
+      recentSignals
+    }), {
+      onError: error => console.error(JSON.stringify({ event: "telegram_poll_failed", message: error.message }))
+    });
+    notifier.sendMessage("NAXYUS VISIONTRADE is online. Live market monitoring and strategy scanning are starting. Live orders are disabled.")
+      .catch(error => console.error(JSON.stringify({ event: "telegram_startup_notice_failed", message: error.message })));
+  }
+  while (!stopping) {
+    const started = Date.now();
+    try {
+      await scanCycle();
+    } catch (error) {
+      console.error(JSON.stringify({ event: "scan_cycle_failed", message: error.message }));
+    }
+    if (positionMonitor) {
+      try {
+        const result = await positionMonitor.runCycle({ nowMillis: Date.now() });
+        console.info(JSON.stringify({
+          event: "paper_position_monitor_cycle",
+          openPositions: result.openPositions, closed: result.closed,
+          skipped: result.skipped, failed: result.failed, at: new Date().toISOString()
+        }));
+      } catch (error) {
+        console.error(JSON.stringify({ event: "paper_position_monitor_failed", message: error.message }));
+      }
+    }
+    const remaining = Math.max(0, intervalMs - (Date.now() - started));
+    if (!stopping) await waitForNextCycle(remaining);
+  }
+}
+
+const requestStop = () => { stopping = true; telegramBot?.stop(); };
+process.once("SIGTERM", requestStop);
+process.once("SIGINT", requestStop);
+main().catch(error => {
+  console.error(JSON.stringify({ event: "worker_fatal", message: error.message }));
+  process.exitCode = 1;
+});

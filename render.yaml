@@ -1,0 +1,21 @@
+services:
+  - type: worker
+    name: visiontrade-market-data-worker
+    runtime: docker
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PAPER_POSITION_MONITORING_ENABLED
+        value: "false"
+      - key: SCAN_INTERVAL_MS
+        value: "60000"
+      - key: DISCOVERY_INTERVAL_MS
+        value: "21600000"
+      - key: MIN_TURNOVER_24H_USD
+        value: "5000000"
+      - key: SCAN_CONCURRENCY
+        value: "3"
