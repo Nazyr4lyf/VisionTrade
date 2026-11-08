@@ -1,9 +1,11 @@
 import { BybitClient } from "./providers/bybit-client.mjs";
 import { CoinGeckoClient } from "./providers/coingecko-client.mjs";
+import { mapWithConcurrency } from "./utils/concurrency.mjs";
 
 const intervalMs = Number(process.env.SCAN_INTERVAL_MS ?? 60_000);
 const discoveryIntervalMs = Number(process.env.DISCOVERY_INTERVAL_MS ?? 21_600_000);
 const minimumTurnoverUsd = Number(process.env.MIN_TURNOVER_24H_USD ?? 5_000_000);
+const scanConcurrency = Number(process.env.SCAN_CONCURRENCY ?? 3);
 
 if (!Number.isFinite(intervalMs) || intervalMs < 15_000) {
   throw new Error("SCAN_INTERVAL_MS must be at least 15000");
@@ -13,6 +15,9 @@ if (!Number.isFinite(discoveryIntervalMs) || discoveryIntervalMs < 60_000) {
 }
 if (!Number.isFinite(minimumTurnoverUsd) || minimumTurnoverUsd < 0) {
   throw new Error("MIN_TURNOVER_24H_USD must be non-negative");
+}
+if (!Number.isInteger(scanConcurrency) || scanConcurrency < 1 || scanConcurrency > 10) {
+  throw new Error("SCAN_CONCURRENCY must be an integer between 1 and 10");
 }
 
 const bybit = new BybitClient();
@@ -69,7 +74,7 @@ async function scanCycle() {
   // Market-data collection only. Strategy parity and paper-ledger persistence
   // must pass their own tests before signal generation is enabled.
   const sample = discovery.slice(0, 30);
-  const results = await Promise.allSettled(sample.map(async item => {
+  const results = await mapWithConcurrency(sample, scanConcurrency, async item => {
     const [oneMinute, fiveMinute] = await Promise.all([
       bybit.getKlines(item.market, item.symbol, "1", { limit: 120 }),
       bybit.getKlines(item.market, item.symbol, "5", { limit: 120 })
@@ -80,12 +85,13 @@ async function scanCycle() {
       oneMinuteClosed: oneMinute.filter(candle => candle.isClosed).length,
       fiveMinuteClosed: fiveMinute.filter(candle => candle.isClosed).length
     };
-  }));
+  });
 
   const successful = results.filter(result => result.status === "fulfilled").length;
   console.info(JSON.stringify({
     event: "market_data_cycle",
     marketPairsRequested: sample.length,
+    scanConcurrency,
     marketPairsSucceeded: successful,
     marketPairsFailed: results.length - successful,
     at: new Date().toISOString()
