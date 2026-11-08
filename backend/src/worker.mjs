@@ -5,6 +5,7 @@ import { SupabasePaperTradeStore } from "./paper/supabase-paper-trade-store.mjs"
 import { PaperTradeLedger } from "./paper/paper-trade-ledger.mjs";
 import { PaperTradingPipeline } from "./paper/paper-trading-pipeline.mjs";
 import { OpenPositionMonitor } from "./paper/open-position-monitor.mjs";
+import { TelegramBot } from "./telegram/telegram-bot.mjs";
 
 const intervalMs = Number(process.env.SCAN_INTERVAL_MS ?? 60_000);
 const discoveryIntervalMs = Number(process.env.DISCOVERY_INTERVAL_MS ?? 21_600_000);
@@ -60,6 +61,16 @@ if (paperPositionMonitoringEnabled) {
 let stopping = false;
 let lastDiscoveryAt = 0;
 let discovery = [];
+let lastScanAt = null;
+let lastScanPairs = 0;
+let telegramBot = null;
+let telegramTask = null;
+
+if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+  telegramBot = new TelegramBot();
+} else if (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_CHAT_ID) {
+  throw new Error("Set both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to enable Telegram");
+}
 
 async function refreshDiscovery() {
   const [spot, perpetual] = await Promise.all([
@@ -123,6 +134,8 @@ async function scanCycle() {
   });
 
   const successful = results.filter(result => result.status === "fulfilled").length;
+  lastScanAt = new Date().toISOString();
+  lastScanPairs = sample.length;
   console.info(JSON.stringify({
     event: "market_data_cycle",
     marketPairsRequested: sample.length,
@@ -185,7 +198,7 @@ async function main() {
   }
 }
 
-const requestStop = () => { stopping = true; };
+const requestStop = () => { stopping = true; telegramBot?.stop(); };
 process.once("SIGTERM", requestStop);
 process.once("SIGINT", requestStop);
 main().catch(error => {
