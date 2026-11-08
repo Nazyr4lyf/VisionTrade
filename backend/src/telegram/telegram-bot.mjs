@@ -1,11 +1,5 @@
 const API_BASE = "https://api.telegram.org";
 
-function safeInteger(value, name) {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${name} must be a positive integer`);
-  return parsed;
-}
-
 export class TelegramBot {
   constructor({
     token = process.env.TELEGRAM_BOT_TOKEN,
@@ -14,8 +8,14 @@ export class TelegramBot {
     pollTimeoutSeconds = 20,
     requestTimeoutMs = 30_000
   } = {}) {
-    if (!token || !token.trim()) throw new Error("TELEGRAM_BOT_TOKEN is required");
-    if (!chatId || !String(chatId).trim()) throw new Error("TELEGRAM_CHAT_ID is required");
+    if (typeof token !== "string" || !token.trim()) throw new Error("TELEGRAM_BOT_TOKEN is required");
+    if (chatId === undefined || chatId === null || !String(chatId).trim()) throw new Error("TELEGRAM_CHAT_ID is required");
+    if (!Number.isInteger(pollTimeoutSeconds) || pollTimeoutSeconds < 1 || pollTimeoutSeconds > 50) {
+      throw new Error("Telegram poll timeout must be between 1 and 50 seconds");
+    }
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= pollTimeoutSeconds * 1000) {
+      throw new Error("Telegram request timeout must exceed the long-poll timeout");
+    }
     this.token = token.trim();
     this.chatId = String(chatId).trim();
     this.fetchImpl = fetchImpl;
@@ -36,9 +36,7 @@ export class TelegramBot {
         signal: controller.signal
       });
       const body = await response.json();
-      if (!response.ok || body.ok !== true) {
-        throw new Error(`Telegram API request failed (${method})`);
-      }
+      if (!response.ok || body.ok !== true) throw new Error(`Telegram API request failed (${method})`);
       return body.result;
     } catch (error) {
       if (error.name === "AbortError") throw new Error(`Telegram API request timed out (${method})`);
@@ -53,28 +51,27 @@ export class TelegramBot {
       throw new Error("Telegram message must contain 1 to 4096 characters");
     }
     return this.call("sendMessage", {
-      chat_id: this.chatId,
-      text,
-      disable_web_page_preview: true
+      chat_id: this.chatId, text, disable_web_page_preview: true
     });
   }
 
   async handleUpdate(update, getStatus) {
     const message = update?.message;
     if (!message?.text || !message.chat || String(message.chat.id) !== this.chatId) return;
-    const command = message.text.trim().split(/\\s+/, 1)[0].split("@")[0].toLowerCase();
+    const command = message.text.trim().split(/\s+/, 1)[0].split("@")[0].toLowerCase();
     if (command === "/start" || command === "/help") {
       await this.sendMessage(
-        "NAXYUS VISIONTRADE\\nBot connection is active.\\n\\nCommands:\\n/status - worker and monitoring status\\n/help - show commands"
+        "NAXYUS VISIONTRADE\nBot connection is active.\n\nCommands:\n/status - worker and monitoring status\n/help - show commands"
       );
     } else if (command === "/status") {
       const status = getStatus();
       await this.sendMessage(
-        "VISIONTRADE STATUS\\n" +
-        `Worker: ${status.running ? "RUNNING" : "STOPPED"}\\n` +
-        `Mode: ${status.mode}\\n` +
-        `Last scan: ${status.lastScanAt ?? "not yet completed"}\\n` +
-        `Market pairs scanned: ${status.lastScanPairs ?? 0}\\n` +
+        "VISIONTRADE STATUS\n" +
+        `Worker: ${status.running ? "RUNNING" : "STOPPED"}\n` +
+        `Mode: ${status.mode}\n` +
+        `Last scan: ${status.lastScanAt ?? "not yet completed"}\n` +
+        `Market pairs scanned: ${status.lastScanPairs ?? 0}\n` +
+        `Actionable signals: ${status.actionableSignals ?? 0}\n` +
         "Live orders: DISABLED"
       );
     }
@@ -82,13 +79,12 @@ export class TelegramBot {
 
   async pollOnce(getStatus) {
     const updates = await this.call("getUpdates", {
-      offset: this.offset,
-      timeout: this.pollTimeoutSeconds,
-      allowed_updates: ["message"]
-    }, (this.pollTimeoutSeconds + 10) * 1000);
+      offset: this.offset, timeout: this.pollTimeoutSeconds, allowed_updates: ["message"]
+    }, this.requestTimeoutMs);
     for (const update of updates) {
-      this.offset = Math.max(this.offset, update.update_id + 1);
+      if (!Number.isSafeInteger(update.update_id)) continue;
       await this.handleUpdate(update, getStatus);
+      this.offset = Math.max(this.offset, update.update_id + 1);
     }
   }
 
@@ -99,14 +95,12 @@ export class TelegramBot {
         await this.pollOnce(getStatus);
       } catch (error) {
         onError(error);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        if (!this.stopped) await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
   }
 
-  stop() {
-    this.stopped = true;
-  }
+  stop() { this.stopped = true; }
 }
 
 export function telegramConfigFromEnv(env = process.env) {
