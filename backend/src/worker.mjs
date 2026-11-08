@@ -11,6 +11,7 @@ import { ScalpingStrategyEngine } from "./strategy/scalping-strategy.mjs";
 import { SignalAlertDeduplicator, formatStrategyAlert } from "./strategy/signal-alerts.mjs";
 import { calculateIndicators } from "./strategy/indicators.mjs";
 import { StopTargetEngine } from "./risk/stop-target-engine.mjs";
+import { PaperTradeApprovalEngine } from "./risk/paper-trade-approval-engine.mjs";
 
 const intervalMs = Number(process.env.SCAN_INTERVAL_MS ?? 60_000);
 const discoveryIntervalMs = Number(process.env.DISCOVERY_INTERVAL_MS ?? 21_600_000);
@@ -38,6 +39,40 @@ const coinGecko = new CoinGeckoClient({ apiKey: process.env.COINGECKO_DEMO_API_K
 const strategyEngine = new ScalpingStrategyEngine();
 const alertDeduplicator = new SignalAlertDeduplicator();
 const stopTargetEngine = new StopTargetEngine();
+const paperApprovalEngine = new PaperTradeApprovalEngine();
+
+function optionalRate(name) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value >= 1) throw new Error(name + " must be a rate from 0 to less than 1");
+  return value;
+}
+function optionalEquity() {
+  const raw = process.env.PAPER_ACCOUNT_EQUITY;
+  if (raw === undefined || raw.trim() === "") return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) throw new Error("PAPER_ACCOUNT_EQUITY must be positive");
+  return value;
+}
+const paperEquity = optionalEquity();
+const paperCosts = {
+  SPOT: {
+    entryFeeRate: optionalRate("PAPER_SPOT_ENTRY_FEE_RATE"),
+    exitFeeRate: optionalRate("PAPER_SPOT_EXIT_FEE_RATE"),
+    slippageRatePerSide: optionalRate("PAPER_SPOT_SLIPPAGE_RATE_PER_SIDE"),
+    fundingRateAllowance: 0
+  },
+  USDT_PERPETUAL: {
+    entryFeeRate: optionalRate("PAPER_PERPETUAL_ENTRY_FEE_RATE"),
+    exitFeeRate: optionalRate("PAPER_PERPETUAL_EXIT_FEE_RATE"),
+    slippageRatePerSide: optionalRate("PAPER_PERPETUAL_SLIPPAGE_RATE_PER_SIDE"),
+    fundingRateAllowance: optionalRate("PAPER_PERPETUAL_FUNDING_RATE_ALLOWANCE")
+  }
+};
+function costsConfigured(marketType) {
+  return paperEquity !== null && Object.values(paperCosts[marketType] ?? {}).every(value => value !== null);
+}
 let notifier = null;
 let telegramBot = null;
 let positionMonitor = null;
@@ -121,31 +156,36 @@ async function scanCycle() {
     });
     signal.signalCandleTimestampMillis = oneMinute.filter(candle => candle.isClosed).at(-1)?.timestampMillis;
     let riskLevels = null;
+    let paperApproval = null;
     if (["BUY", "SELL"].includes(signal.action)) {
       const indicators = calculateIndicators(fiveMinute);
       riskLevels = stopTargetEngine.build({
-        signal,
-        entryPrice: signal.referencePrice,
-        atr: indicators.atr14,
-        supportZone: signal.supportZone,
-        resistanceZone: signal.resistanceZone,
+        signal, entryPrice: signal.referencePrice, atr: indicators.atr14,
+        supportZone: signal.supportZone, resistanceZone: signal.resistanceZone,
         priceTick: item.priceTick
       });
+      if (costsConfigured(signal.marketType)) {
+        paperApproval = paperApprovalEngine.evaluate({
+          signal, atr: indicators.atr14, instrument: item,
+          equity: paperEquity, costs: paperCosts[signal.marketType]
+        });
+      }
       recentSignals.unshift({
         symbol: signal.symbol, marketType: signal.marketType, action: signal.action,
         referencePrice: signal.referencePrice, evaluatedAtMillis: signal.signalCandleTimestampMillis,
-        riskAccepted: riskLevels.accepted,
-        grossRiskReward: riskLevels.grossRiskReward,
-        stopLossPrice: riskLevels.stopLossPrice,
-        takeProfitPrice: riskLevels.takeProfitPrice,
-        riskReason: riskLevels.rejectionReason
+        riskAccepted: riskLevels.accepted, grossRiskReward: riskLevels.grossRiskReward,
+        stopLossPrice: riskLevels.stopLossPrice, takeProfitPrice: riskLevels.takeProfitPrice,
+        riskReason: riskLevels.rejectionReason, paperApproved: paperApproval?.approved ?? false,
+        paperApprovalReason: paperApproval?.rejectionReason ?? "Paper account equity and verified market costs are not configured.",
+        paperQuantity: paperApproval?.paperTradeCandidate?.quantity ?? null,
+        paperNetRiskReward: paperApproval?.risk?.netRiskReward ?? null
       });
       recentSignals = recentSignals.slice(0, 10);
     }
     let alertSent = false;
     if (notifier && ["BUY", "SELL"].includes(signal.action) && !alertDeduplicator.hasSent(signal)) {
       try {
-        await notifier.sendMessage(formatStrategyAlert(signal, riskLevels));
+        await notifier.sendMessage(formatStrategyAlert(signal, riskLevels, paperApproval, costsConfigured(signal.marketType)));
         alertDeduplicator.markSent(signal);
         alertSent = true;
       } catch (error) {
@@ -200,6 +240,7 @@ async function main() {
     mode: "LIVE_MARKET_MONITORING",
     strategy: "RANGE_SCALPING_5M_CONTEXT_1M_CONFIRMATION",
     telegramEnabled: Boolean(notifier),
+    paperRiskApprovalConfigured: paperEquity !== null,
     paperPositionMonitoringEnabled,
     paperPositionEntryEnabled: false,
     liveTrading: false
