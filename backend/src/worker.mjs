@@ -9,6 +9,8 @@ import { TelegramBot } from "./telegram/telegram-bot.mjs";
 import { TelegramNotifier } from "./notifications/telegram-notifier.mjs";
 import { ScalpingStrategyEngine } from "./strategy/scalping-strategy.mjs";
 import { SignalAlertDeduplicator, formatStrategyAlert } from "./strategy/signal-alerts.mjs";
+import { calculateIndicators } from "./strategy/indicators.mjs";
+import { StopTargetEngine } from "./risk/stop-target-engine.mjs";
 
 const intervalMs = Number(process.env.SCAN_INTERVAL_MS ?? 60_000);
 const discoveryIntervalMs = Number(process.env.DISCOVERY_INTERVAL_MS ?? 21_600_000);
@@ -35,6 +37,7 @@ const bybit = new BybitClient();
 const coinGecko = new CoinGeckoClient({ apiKey: process.env.COINGECKO_DEMO_API_KEY });
 const strategyEngine = new ScalpingStrategyEngine();
 const alertDeduplicator = new SignalAlertDeduplicator();
+const stopTargetEngine = new StopTargetEngine();
 let notifier = null;
 let telegramBot = null;
 let positionMonitor = null;
@@ -70,6 +73,7 @@ let discovery = [];
 let lastScanAt = null;
 let lastScanPairs = 0;
 let lastSignals = 0;
+let recentSignals = [];
 let telegramTask = null;
 
 async function refreshDiscovery() {
@@ -116,10 +120,30 @@ async function scanCycle() {
       nowMillis: receivedAt
     });
     signal.signalCandleTimestampMillis = oneMinute.filter(candle => candle.isClosed).at(-1)?.timestampMillis;
+    let riskLevels = null;
+    if (["BUY", "SELL"].includes(signal.action)) {
+      const indicators = calculateIndicators(fiveMinute);
+      riskLevels = stopTargetEngine.build({
+        signal,
+        entryPrice: signal.referencePrice,
+        atr: indicators.atr14,
+        supportZone: signal.supportZone,
+        resistanceZone: signal.resistanceZone,
+        priceTick: item.priceTick
+      });
+      recentSignals.unshift({
+        symbol: signal.symbol, marketType: signal.marketType, action: signal.action,
+        referencePrice: signal.referencePrice, evaluatedAtMillis: signal.signalCandleTimestampMillis,
+        riskAccepted: riskLevels.accepted,
+        grossRiskReward: riskLevels.grossRiskReward,
+        riskReason: riskLevels.rejectionReason
+      });
+      recentSignals = recentSignals.slice(0, 10);
+    }
     let alertSent = false;
     if (notifier && !alertDeduplicator.hasSent(signal)) {
       try {
-        await notifier.sendMessage(formatStrategyAlert(signal));
+        await notifier.sendMessage(formatStrategyAlert(signal, riskLevels));
         alertDeduplicator.markSent(signal);
         alertSent = true;
       } catch (error) {
