@@ -108,7 +108,7 @@ VisionTradeTheme {
                     "screenshot" -> ScreenshotAnalysisScreen(
 
                         onAnalysisComplete = { analysis ->
-
+                            currentScreen = "result"
                             analysisViewModel.analyzeChart(analysis)
                         },
 
@@ -124,7 +124,7 @@ VisionTradeTheme {
                     "camera" -> CameraAnalysisScreen(
 
                         onAnalysisComplete = { analysis ->
-
+                            currentScreen = "result"
                             analysisViewModel.analyzeChart(analysis)
                         },
 
@@ -140,7 +140,7 @@ VisionTradeTheme {
                     "manual" -> ManualDataEntryScreen(
 
                         onAnalysisComplete = { analysis ->
-
+                            currentScreen = "result"
                             analysisViewModel.analyzeChart(analysis)
                         },
 
