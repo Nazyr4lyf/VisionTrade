@@ -74,7 +74,10 @@ export class TelegramBot {
             const levels = item.riskAccepted
               ? " | SL " + item.stopLossPrice + " | TP " + item.takeProfitPrice
               : " | risk validation: " + (item.riskReason ?? "rejected");
-            return item.symbol + " " + item.marketType + " " + side + " @ " + item.referencePrice + rr + levels;
+            const approval = item.paperApproved
+              ? " | PAPER APPROVED | qty " + item.paperQuantity + " | net RR " + Number(item.paperNetRiskReward).toFixed(2) + "R"
+              : " | PAPER NOT APPROVED: " + (item.paperApprovalReason ?? "not configured");
+            return item.symbol + " " + item.marketType + " " + side + " @ " + item.referencePrice + rr + levels + approval;
           }).join("\n")
         : "No actionable strategy signals in the latest scans.";
       await this.sendMessage("LATEST VISIONTRADE SIGNALS\n" + lines + "\n\nSignal only — no exchange orders.");
@@ -87,6 +90,7 @@ export class TelegramBot {
         "Last scan: " + (status.lastScanAt ?? "not yet completed") + "\n" +
         "Market pairs scanned: " + (status.lastScanPairs ?? 0) + "\n" +
         "Actionable signals: " + (status.actionableSignals ?? 0) + "\n" +
+        "Paper risk approval configured: " + (status.paperRiskApprovalConfigured ? "YES" : "NO") + "\n" +
         "Live orders: DISABLED"
       );
     }
