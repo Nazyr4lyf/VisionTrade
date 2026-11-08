@@ -29,6 +29,38 @@ export class PaperTradingPipeline {
     this.idFactory = idFactory;
   }
 
+  async processOpenPositions({ marketDataByInstrument = {}, costsByInstrument = {}, nowMillis = Date.now() } = {}) {
+    if (!this.enabled) {
+      return { status: "DISABLED", processed: 0, results: [] };
+    }
+    if (!this.ledger || typeof this.ledger.listOpenTrades !== "function") {
+      throw new Error("An enabled paper pipeline requires ledger listOpenTrades support.");
+    }
+    const openTrades = await this.ledger.listOpenTrades();
+    const results = [];
+    for (const trade of openTrades) {
+      const key = `${trade.symbol}|${trade.marketType}`;
+      const marketData = marketDataByInstrument[key];
+      if (!marketData || !Array.isArray(marketData.candles)) {
+        results.push({
+          tradeId: trade.id,
+          status: "SKIPPED",
+          reason: "OPEN_POSITION_MARKET_DATA_UNAVAILABLE"
+        });
+        continue;
+      }
+      const costs = costsByInstrument[key] ?? {};
+      const result = await this.processOpenTrade({
+        trade,
+        candles: marketData.candles,
+        costs,
+        nowMillis
+      });
+      results.push({ tradeId: trade.id, ...result });
+    }
+    return { status: "PROCESSED", processed: results.length, results };
+  }
+
   async processOpenTrade({ trade, candles, costs = {}, nowMillis = Date.now() }) {
     if (!this.enabled) {
       return { status: "DISABLED", reason: "PAPER_PIPELINE_DISABLED", simulation: null, ledger: null };
