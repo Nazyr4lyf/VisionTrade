@@ -5,7 +5,7 @@ import { formatStrategyAlert, SignalAlertDeduplicator } from "../src/strategy/si
 const signal = {
   symbol: "BTCUSDT", marketType: "SPOT", action: "BUY", referencePrice: 65000,
   supportZone: { low: 64800, high: 64900 },
-  reasons: ["Support confirmed.", "Bullish 1m close."], evaluatedAtMillis: 1800000000000
+  reasons: ["Support confirmed.", "Bullish 1m close."], evaluatedAtMillis: 1800000000000, signalCandleTimestampMillis: 1799999940000
 };
 
 test("formats an actionable strategy alert with explicit no-order status", () => {
@@ -26,7 +26,7 @@ test("deduplicates the same symbol, market, action and evaluated candle", () => 
   assert.equal(dedupe.hasSent(signal), false);
   dedupe.markSent(signal);
   assert.equal(dedupe.hasSent(signal), true);
-  assert.equal(dedupe.hasSent({ ...signal, evaluatedAtMillis: signal.evaluatedAtMillis + 60_000 }), false);
+  assert.equal(dedupe.hasSent({ ...signal, signalCandleTimestampMillis: signal.signalCandleTimestampMillis + 60_000 }), false);
   assert.equal(dedupe.hasSent({ ...signal, marketType: "USDT_PERPETUAL" }), false);
   assert.equal(dedupe.hasSent({ ...signal, action: "NO_TRADE" }), false);
 });
