@@ -65,7 +65,7 @@ test("skips stale closed candle data without invoking the exit pipeline", async 
   const { monitor, calls } = makeMonitor({
     candles: [{ ...validCandle, timestampMillis: 0 }]
   });
-  const result = await monitor.runCycle({ nowMillis: now });
+  const result = await monitor.runCycle({ nowMillis: 600_000 });
   assert.equal(result.skipped, 1);
   assert.equal(result.results[0].reason, "STALE_CLOSED_CANDLE_DATA");
   assert.equal(calls.processed.length, 0);
