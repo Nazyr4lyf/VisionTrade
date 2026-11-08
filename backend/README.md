@@ -42,11 +42,13 @@ npm start
 The worker can connect to the Telegram Bot API using long polling. It is enabled only when both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are present.
 
 - `/start` and `/help` confirm the bot connection and show available commands.
-- `/status` reports worker state, latest market-data scan time, and number of market pairs requested.
+- `/status` reports worker state, latest scan time, number of market pairs requested, and actionable signal count.
+- `/signals` lists the latest actionable strategy signals and their gross risk/reward validation status.
 - Commands are accepted only from the configured `TELEGRAM_CHAT_ID`; messages are sent only to that chat.
 - A startup notification confirms the worker connection.
 - Telegram is a notification/control interface only. It does not place exchange orders.
-- The worker runs in `LIVE_MARKET_MONITORING` mode. It evaluates the backend `ScalpingStrategyEngine` against each scanned market pair and sends only actionable BUY/SELL alerts. Repeated alerts for the same action on the same closed 1m candle are suppressed; failed Telegram deliveries remain eligible for retry on the next scan. `/status` includes the latest scan and actionable signal count.
+- The worker runs in `LIVE_MARKET_MONITORING` mode. It evaluates the backend `ScalpingStrategyEngine` against each scanned market pair and sends only actionable BUY/SELL alerts. Repeated alerts for the same action on the same closed 1m candle are suppressed; failed Telegram deliveries remain eligible for retry on the next scan.
+- Actionable signals are passed through the confirmed-zone `StopTargetEngine` for candidate stop-loss, take-profit, and gross 2R validation. The alert explicitly marks account risk sizing as pending until paper equity and verified fee/slippage assumptions are configured. A valid gross R multiple is not a net-risk approval.
 
 Set these values in the backend host's private environment/secret settings. Never commit a bot token or put it in source code, workflow YAML, screenshots, or chat messages. If a token is exposed, revoke it with BotFather and replace it.
 
@@ -101,4 +103,4 @@ No service-role key has been added to this repository or to a client app.
 6. Add authenticated app-to-backend APIs and Android notification delivery.
 7. Deploy the worker to an always-on container/service and run paper-only end-to-end tests.
 
-The worker runs `LIVE_MARKET_MONITORING`: it evaluates strategy signals and can send Telegram alerts. The isolated `PaperTradeApprovalEngine` / risk gate is still not wired into signal alerts, so alerts are not approved paper-trade candidates and do not contain risk-sized quantities or validated stop/target levels. No paper entry is automatically created. Live trading and exchange order placement are not implemented.
+The worker runs `LIVE_MARKET_MONITORING`: it evaluates strategy signals, validates candidate stop/target levels and gross R, and can send Telegram alerts. The isolated `PaperTradeApprovalEngine` / 1% net-risk sizing gate is still not wired into the worker, so alerts are not approved paper-trade candidates and do not contain risk-sized quantities. No paper entry is automatically created. Live trading and exchange order placement are not implemented.
