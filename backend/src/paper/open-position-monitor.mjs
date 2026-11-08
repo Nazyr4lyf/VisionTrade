@@ -98,6 +98,7 @@ export class OpenPositionMonitor {
       const close = finiteNumber(candle.close);
       return {
         timestampMillis, open, high, low, close,
+        timeframeMinutes: candle.timeframeMinutes,
         isClosed: candle.isClosed === true
       };
     });
