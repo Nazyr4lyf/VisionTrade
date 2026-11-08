@@ -146,6 +146,8 @@ test("shared Android/backend decision fixtures produce identical action and regi
     });
     assert.equal(result.action, item.expectedAction, item.id);
     assert.equal(result.regime, item.expectedRegime, item.id);
+    const expectedReferencePrice = 100 + Math.sin((item.oneCount - 1) / 2) * 0.8;
+    assert.ok(Math.abs(result.referencePrice - expectedReferencePrice) < 1e-10, `${item.id}: reference price parity`);
     assert.ok(result.reasons.join(" ").toLowerCase().includes(item.expectedReasonContains.toLowerCase()), item.id);
   }
 });
