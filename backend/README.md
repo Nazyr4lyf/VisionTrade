@@ -31,6 +31,16 @@ npm test
 npm start
 ```
 
+## Read-only Supabase connectivity check
+
+After setting `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the backend host's secret manager, run:
+
+```bash
+npm run verify:supabase
+```
+
+This calls only `get_paper_trade_by_id` with a reserved sentinel ID. It performs no inserts, updates, or deletes and never prints the key.
+
 ## Environment variables
 
 - `SCAN_INTERVAL_MS` (default 60000; minimum 15000)
