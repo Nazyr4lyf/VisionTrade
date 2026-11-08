@@ -1,3 +1,9 @@
+function mapNumeric(value) {
+  // PostgreSQL NUMERIC may carry more precision than JavaScript Number can retain.
+  // Keep database decimals as strings at the persistence boundary.
+  return value == null ? null : String(value);
+}
+
 function mapTrade(row) {
   if (!row) return null;
   return {
@@ -7,20 +13,20 @@ function mapTrade(row) {
     symbol: row.symbol,
     marketType: row.market_type,
     side: row.side,
-    quantity: Number(row.quantity),
-    entryPrice: Number(row.entry_price),
-    stopLossPrice: Number(row.stop_loss_price),
-    takeProfitPrice: Number(row.take_profit_price),
-    riskBudget: Number(row.risk_budget),
-    estimatedLossAtStop: Number(row.estimated_loss_at_stop),
-    netRiskReward: Number(row.net_risk_reward),
+    quantity: mapNumeric(row.quantity),
+    entryPrice: mapNumeric(row.entry_price),
+    stopLossPrice: mapNumeric(row.stop_loss_price),
+    takeProfitPrice: mapNumeric(row.take_profit_price),
+    riskBudget: mapNumeric(row.risk_budget),
+    estimatedLossAtStop: mapNumeric(row.estimated_loss_at_stop),
+    netRiskReward: mapNumeric(row.net_risk_reward),
     openedAt: new Date(row.opened_at).getTime(),
     closedAt: row.closed_at ? new Date(row.closed_at).getTime() : null,
     exit: row.exit_reason ? {
       reason: row.exit_reason,
-      fillPrice: Number(row.exit_fill_price),
-      netPnl: Number(row.exit_net_pnl),
-      realizedR: Number(row.exit_realized_r)
+      fillPrice: mapNumeric(row.exit_fill_price),
+      netPnl: mapNumeric(row.exit_net_pnl),
+      realizedR: mapNumeric(row.exit_realized_r)
     } : null
   };
 }
