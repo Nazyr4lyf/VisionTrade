@@ -63,6 +63,9 @@ class ScalpingStrategyEngine(
         val five = fiveMinuteCandles.filter { it.isClosed }.sortedBy { it.timestampMillis }
         val one = oneMinuteCandles.filter { it.isClosed }.sortedBy { it.timestampMillis }
 
+        if (five.any { it.timestampMillis > nowMillis } || one.any { it.timestampMillis > nowMillis }) {
+            return noTrade("A candle timestamp is in the future; market data is invalid.")
+        }
         if (five.size < config.fiveMinuteLookback || one.size < config.oneMinuteLookback) {
             return noTrade("Insufficient closed-candle history for the 5m/1m strategy.")
         }
