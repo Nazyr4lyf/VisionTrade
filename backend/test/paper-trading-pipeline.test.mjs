@@ -105,3 +105,58 @@ test("rejected risk approval never reaches the paper ledger", async () => {
 test("enabled pipeline refuses to start without a persistent ledger", () => {
   assert.throws(() => new PaperTradingPipeline({ enabled: true }), /persistent paper ledger/);
 });
+
+
+test("paper exit simulation closes the persistent ledger with simulated net result", async () => {
+  const calls = [];
+  const ledger = {
+    async openApprovedTrade() { return { created: true }; },
+    async closeTrade(input) {
+      calls.push(input);
+      return { closed: true, reason: null, trade: { id: input.tradeId, status: "CLOSED" } };
+    }
+  };
+  const pipeline = new PaperTradingPipeline({ enabled: true, ledger });
+  const result = await pipeline.processOpenTrade({
+    trade: {
+      id: "open-1", status: "OPEN", openedAt: 1,
+      symbol: "BTCUSDT", marketType: "SPOT", side: "LONG",
+      quantity: "0.1", entryPrice: "100", stopLossPrice: "98",
+      takeProfitPrice: "104", riskBudget: "1"
+    },
+    candles: [{
+      timestampMillis: 60_000, open: 100, high: 101, low: 97,
+      close: 99, isClosed: true
+    }],
+    costs: { feeRate: 0.001, slippageBps: 5 },
+    nowMillis: 120_000
+  });
+  assert.equal(result.status, "PAPER_TRADE_CLOSED");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].tradeId, "open-1");
+  assert.equal(calls[0].exit.reason, "STOP_LOSS");
+  assert.equal(calls[0].closedAt, 120_000);
+});
+
+test("paper exit simulation leaves ledger untouched until a closed candle hits an exit", async () => {
+  let closeCalls = 0;
+  const ledger = {
+    async openApprovedTrade() { return { created: true }; },
+    async closeTrade() { closeCalls++; return { closed: true }; }
+  };
+  const pipeline = new PaperTradingPipeline({ enabled: true, ledger });
+  const result = await pipeline.processOpenTrade({
+    trade: {
+      id: "open-2", status: "OPEN", openedAt: 1,
+      symbol: "BTCUSDT", marketType: "SPOT", side: "LONG",
+      quantity: "0.1", entryPrice: "100", stopLossPrice: "98",
+      takeProfitPrice: "104", riskBudget: "1"
+    },
+    candles: [{
+      timestampMillis: 60_000, open: 100, high: 101, low: 99,
+      close: 100.5, isClosed: true
+    }]
+  });
+  assert.equal(result.status, "POSITION_OPEN");
+  assert.equal(closeCalls, 0);
+});
