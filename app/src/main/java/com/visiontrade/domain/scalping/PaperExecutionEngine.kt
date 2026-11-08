@@ -85,10 +85,21 @@ class PaperExecutionEngine {
 
         val reason = if (stopTouched) PaperExitReason.STOP_LOSS else PaperExitReason.TAKE_PROFIT
         val trigger = if (reason == PaperExitReason.STOP_LOSS) stop else target
+        // A stop is a trigger, not a guaranteed fill price. If the candle opens
+        // beyond the stop, model the exit from that worse opening price.
+        // For targets, keep the trigger price to avoid optimistic gap improvement.
+        val executionReference = if (reason == PaperExitReason.STOP_LOSS) {
+            when (position.side) {
+                PositionSide.LONG -> if (candle.open < stop) candle.open else stop
+                PositionSide.SHORT -> if (candle.open > stop) candle.open else stop
+            }
+        } else {
+            target
+        }
         val slip = position.costs.slippageRatePerSide
         val fill = when (position.side) {
-            PositionSide.LONG -> trigger.multiply(BigDecimal.ONE.subtract(slip))
-            PositionSide.SHORT -> trigger.multiply(BigDecimal.ONE.add(slip))
+            PositionSide.LONG -> executionReference.multiply(BigDecimal.ONE.subtract(slip))
+            PositionSide.SHORT -> executionReference.multiply(BigDecimal.ONE.add(slip))
         }
 
         val multiplier = position.contractMultiplier
