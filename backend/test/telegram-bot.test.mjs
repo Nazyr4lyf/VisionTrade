@@ -78,7 +78,8 @@ test("configured chat can request recent strategy signals", async () => {
     recentSignals: [{
       symbol: "BTCUSDT", marketType: "SPOT", action: "BUY",
       referencePrice: 65000, riskAccepted: true, grossRiskReward: 2.4,
-      stopLossPrice: 64700, takeProfitPrice: 65700
+      stopLossPrice: 64700, takeProfitPrice: 65700,
+      paperApproved: false, paperApprovalReason: "Paper account equity is not configured."
     }]
   }));
   assert.equal(sent.length, 1);
@@ -86,5 +87,6 @@ test("configured chat can request recent strategy signals", async () => {
   assert.match(sent[0].text, /2.40R/);
   assert.match(sent[0].text, /SL 64700/);
   assert.match(sent[0].text, /TP 65700/);
+  assert.match(sent[0].text, /PAPER NOT APPROVED/);
   assert.match(sent[0].text, /no exchange orders/i);
 });
