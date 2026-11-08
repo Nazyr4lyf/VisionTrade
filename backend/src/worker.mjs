@@ -1,11 +1,28 @@
 import { BybitClient } from "./providers/bybit-client.mjs";
 import { CoinGeckoClient } from "./providers/coingecko-client.mjs";
 import { mapWithConcurrency } from "./utils/concurrency.mjs";
+import { SupabasePaperTradeStore } from "./paper/supabase-paper-trade-store.mjs";
+import { PaperTradeLedger } from "./paper/paper-trade-ledger.mjs";
+import { PaperTradingPipeline } from "./paper/paper-trading-pipeline.mjs";
+import { OpenPositionMonitor } from "./paper/open-position-monitor.mjs";
 
 const intervalMs = Number(process.env.SCAN_INTERVAL_MS ?? 60_000);
 const discoveryIntervalMs = Number(process.env.DISCOVERY_INTERVAL_MS ?? 21_600_000);
 const minimumTurnoverUsd = Number(process.env.MIN_TURNOVER_24H_USD ?? 5_000_000);
 const scanConcurrency = Number(process.env.SCAN_CONCURRENCY ?? 3);
+const paperPositionMonitoringEnabled = process.env.PAPER_POSITION_MONITORING_ENABLED === "true";
+
+function requiredNonNegativeEnv(name) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") {
+    throw new Error(`${name} is required when paper position monitoring is enabled`);
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative number`);
+  }
+  return value;
+}
 
 if (!Number.isFinite(intervalMs) || intervalMs < 15_000) {
   throw new Error("SCAN_INTERVAL_MS must be at least 15000");
@@ -22,6 +39,24 @@ if (!Number.isInteger(scanConcurrency) || scanConcurrency < 1 || scanConcurrency
 
 const bybit = new BybitClient();
 const coinGecko = new CoinGeckoClient({ apiKey: process.env.COINGECKO_DEMO_API_KEY });
+let positionMonitor = null;
+
+if (paperPositionMonitoringEnabled) {
+  const store = new SupabasePaperTradeStore();
+  const ledger = new PaperTradeLedger({ store });
+  const pipeline = new PaperTradingPipeline({ enabled: true, ledger });
+  positionMonitor = new OpenPositionMonitor({
+    ledger,
+    pipeline,
+    bybit,
+    spotCosts: {
+      feeRate: requiredNonNegativeEnv("PAPER_SPOT_FEE_RATE"),
+      slippageBps: requiredNonNegativeEnv("PAPER_SPOT_SLIPPAGE_BPS")
+    },
+    maxCandleAgeMs: Number(process.env.PAPER_MAX_CANDLE_AGE_MS ?? 180_000),
+    concurrency: Number(process.env.PAPER_MONITOR_CONCURRENCY ?? 3)
+  });
+}
 let stopping = false;
 let lastDiscoveryAt = 0;
 let discovery = [];
@@ -116,6 +151,8 @@ async function main() {
   console.info(JSON.stringify({
     event: "worker_started",
     mode: "MARKET_DATA_ONLY",
+    paperPositionMonitoringEnabled,
+    paperPositionEntryEnabled: false,
     liveTrading: false
   }));
   while (!stopping) {
@@ -124,6 +161,24 @@ async function main() {
       await scanCycle();
     } catch (error) {
       console.error(JSON.stringify({ event: "scan_cycle_failed", message: error.message }));
+    }
+    if (positionMonitor) {
+      try {
+        const result = await positionMonitor.runCycle({ nowMillis: Date.now() });
+        console.info(JSON.stringify({
+          event: "paper_position_monitor_cycle",
+          openPositions: result.openPositions,
+          closed: result.closed,
+          skipped: result.skipped,
+          failed: result.failed,
+          at: new Date().toISOString()
+        }));
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: "paper_position_monitor_failed",
+          message: error.message
+        }));
+      }
     }
     const remaining = Math.max(0, intervalMs - (Date.now() - started));
     if (!stopping) await waitForNextCycle(remaining);
