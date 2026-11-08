@@ -13,7 +13,8 @@ This Node.js 20+ worker is a backend-side market-data ingestion foundation for t
 - The paper-trade lifecycle coordinator and server-only Supabase PostgREST adapter are implemented.
 - The VisionTrade paper-trade schema has been deployed to the dedicated Supabase project below; the pre-existing HMS and other account projects were not modified.
 - The schema stores paper trades in the private `private` schema, enables RLS, grants no client-role access, and exposes service-role-only RPC functions. Atomic unique constraints prevent duplicate idempotency keys and more than one open position per symbol/market.
-- The persistence adapter preserves PostgreSQL `NUMERIC` values as decimal strings when reading rows. Do not coerce persisted crypto quantities/prices to JavaScript `Number` for precision-sensitive accounting.
+- The persistence adapter preserves PostgreSQL `NUMERIC` values as decimal strings when reading rows. The open-trades RPC explicitly casts numeric fields to text before JSON serialization; do not coerce persisted crypto quantities/prices to JavaScript `Number` for precision-sensitive accounting.
+- The server-only store and ledger can now list durable OPEN paper positions through `list_open_paper_trades`; this is not wired into the worker.
 
 ## Dedicated Supabase project
 
@@ -21,7 +22,7 @@ This Node.js 20+ worker is a backend-side market-data ingestion foundation for t
 - Project reference: `jjcpaasizhczyqnozblo`
 - Region: `eu-west-1`
 - API URL: `https://jjcpaasizhczyqnozblo.supabase.co`
-- Database migration: `visiontrade_paper_trade_ledger`
+- Database migrations: `visiontrade_paper_trade_ledger` and `002-list-open-paper-trades.sql`
 
 ## Run
 
