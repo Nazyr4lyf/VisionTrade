@@ -1,6 +1,8 @@
 package com.visiontrade.domain.scalping
 
+import com.google.gson.JsonParser
 import java.math.BigDecimal
+import kotlin.math.sin
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -89,3 +91,71 @@ class ScalpingStrategyEngineTest {
         isClosed = true
     )
 }
+
+
+    @Test
+    fun sharedAndroidBackendDecisionFixturesProduceExpectedActionAndRegime() {
+        val stream = javaClass.classLoader?.getResourceAsStream("scalping/decision-cases.json")
+            ?: error("Shared strategy decision fixtures were not found on the test classpath.")
+        val fixtures = stream.bufferedReader().use { JsonParser.parseReader(it).asJsonArray }
+        val now = 1_800_000_000_000L
+
+        fixtures.forEach { element ->
+            val item = element.asJsonObject
+            val id = item.get("id").asString
+            val marketType = CryptoMarketType.valueOf(item.get("marketType").asString)
+            val receivedOffset = item.get("receivedAtOffsetMillis").asLong
+            val fiveCount = item.get("fiveCount").asInt
+            val oneCount = item.get("oneCount").asInt
+            val fiveTimeframe = item.get("fiveTimeframeMinutes").asInt
+            val oneTimeframe = item.get("oneTimeframeMinutes").asInt
+            val fivePattern = item.get("fivePattern").asString
+            val future = item.get("futureCandles").asBoolean
+
+            fun rows(count: Int, timeframeMinutes: Int, pattern: String): List<CryptoCandle> =
+                (0 until count).map { index ->
+                    val close = if (pattern == "TREND") {
+                        100.0 + index * 0.8
+                    } else {
+                        100.0 + sin(index / if (timeframeMinutes == 5) 3.0 else 2.0) *
+                            if (timeframeMinutes == 5) 2.0 else 0.8
+                    }
+                    val open = close - 0.15
+                    val high = maxOf(open, close) + 0.5
+                    val low = minOf(open, close) - 0.5
+                    val timestamp = if (future) {
+                        now + (index + 1) * timeframeMinutes * 60_000L
+                    } else {
+                        now - (count - index) * timeframeMinutes * 60_000L
+                    }
+                    val volume = BigDecimal((100 + index % 5).toString())
+                    CryptoCandle(
+                        timestampMillis = timestamp,
+                        open = BigDecimal(open.toString()),
+                        high = BigDecimal(high.toString()),
+                        low = BigDecimal(low.toString()),
+                        close = BigDecimal(close.toString()),
+                        volume = volume,
+                        turnover = BigDecimal(close.toString()) * volume,
+                        timeframe = if (timeframeMinutes == 5) MarketTimeframe.FIVE_MINUTES else MarketTimeframe.ONE_MINUTE,
+                        isClosed = true
+                    )
+                }
+
+            val result = engine.analyze(
+                symbol = "BTCUSDT",
+                marketType = marketType,
+                fiveMinuteCandles = rows(fiveCount, fiveTimeframe, fivePattern),
+                oneMinuteCandles = rows(oneCount, oneTimeframe, "RANGE"),
+                marketDataReceivedAtMillis = now + receivedOffset,
+                nowMillis = now
+            )
+
+            assertEquals(item.get("expectedAction").asString, result.action.name, id)
+            assertEquals(item.get("expectedRegime").asString, result.regime.name, id)
+            assertTrue(
+                result.reasons.joinToString(" ").contains(item.get("expectedReasonContains").asString, ignoreCase = true),
+                id
+            )
+        }
+    }
