@@ -65,7 +65,7 @@ class SupportResistanceEngineTest {
 
     @Test
     fun mixedTimeframesAreRejected() {
-        val first = candle(1, 100, 95)
+        val first = candle(1, 100, 95).copy(timeframe = MarketTimeframe.ONE_MINUTE)
         val second = candle(2, 110, 100).copy(timeframe = MarketTimeframe.FIVE_MINUTES)
         assertFailsWith<IllegalArgumentException> {
             engine.detectZones(listOf(first, second), 1, 1, BigDecimal.ONE, 1)
