@@ -107,26 +107,32 @@ export class ScalpingStrategyEngine {
         !Number.isFinite(marketDataReceivedAtMillis) || marketDataReceivedAtMillis <= 0) {
       throw new Error("Market data timestamps must be positive");
     }
+    const fallbackReferencePrice = oneMinuteCandles
+      .filter(c => c.isClosed)
+      .slice()
+      .sort((a, b) => a.timestampMillis - b.timestampMillis)
+      .at(-1)?.close ?? null;
+
     if (marketDataReceivedAtMillis > nowMillis ||
         nowMillis - marketDataReceivedAtMillis > this.config.maximumMarketDataAgeMillis) {
-      return noTrade(symbol, marketType, "Market data is stale or has an invalid receive timestamp.", nowMillis);
+      return noTrade(symbol, marketType, "Market data is stale or has an invalid receive timestamp.", nowMillis, { referencePrice: fallbackReferencePrice });
     }
 
     const five = fiveMinuteCandles.filter(c => c.isClosed).slice().sort((a,b)=>a.timestampMillis-b.timestampMillis);
     const one = oneMinuteCandles.filter(c => c.isClosed).slice().sort((a,b)=>a.timestampMillis-b.timestampMillis);
     if (five.some(c => c.timestampMillis > nowMillis) || one.some(c => c.timestampMillis > nowMillis)) {
-      return noTrade(symbol, marketType, "A candle timestamp is in the future; market data is invalid.", nowMillis);
+      return noTrade(symbol, marketType, "A candle timestamp is in the future; market data is invalid.", nowMillis, { referencePrice: fallbackReferencePrice });
     }
     if (five.length < this.config.fiveMinuteLookback || one.length < this.config.oneMinuteLookback) {
-      return noTrade(symbol, marketType, "Insufficient closed-candle history for the 5m/1m strategy.", nowMillis);
+      return noTrade(symbol, marketType, "Insufficient closed-candle history for the 5m/1m strategy.", nowMillis, { referencePrice: fallbackReferencePrice });
     }
     if (five.some(c => c.timeframeMinutes !== 5) || one.some(c => c.timeframeMinutes !== 1)) {
-      return noTrade(symbol, marketType, "Candle timeframe does not match the required 5m/1m strategy.", nowMillis);
+      return noTrade(symbol, marketType, "Candle timeframe does not match the required 5m/1m strategy.", nowMillis, { referencePrice: fallbackReferencePrice });
     }
     for (const rows of [five, one]) {
       for (let i=1;i<rows.length;i++) {
         if (rows[i-1].timestampMillis >= rows[i].timestampMillis) {
-          return noTrade(symbol, marketType, "Candle timestamps must be unique and strictly increasing.", nowMillis);
+          return noTrade(symbol, marketType, "Candle timestamps must be unique and strictly increasing.", nowMillis, { referencePrice: fallbackReferencePrice });
         }
       }
     }
