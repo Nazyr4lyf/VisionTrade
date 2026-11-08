@@ -1,0 +1,11 @@
+{
+  "name": "visiontrade-market-data-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test",
+    "start": "node src/worker.mjs"
+  }
+}
