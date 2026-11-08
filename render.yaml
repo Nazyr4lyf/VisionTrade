@@ -3,10 +3,9 @@ services:
     name: visiontrade-market-data-worker
     runtime: docker
     region: frankfurt
-    plan: starter
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    autoDeploy: false
+    autoDeployTrigger: off
     envVars:
       - key: NODE_ENV
         value: production
