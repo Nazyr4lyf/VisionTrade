@@ -8,7 +8,7 @@ function candle(index, timeframeMinutes, close, {
   low = Math.min(open, close) - 0.5, volume = 100, isClosed = true
 } = {}) {
   return {
-    timestampMillis: NOW - (100 - index) * timeframeMinutes * 60_000,
+    timestampMillis: NOW - (120 - index) * timeframeMinutes * 60_000,
     open, high, low, close, volume, turnover: close * volume,
     timeframeMinutes, isClosed
   };
