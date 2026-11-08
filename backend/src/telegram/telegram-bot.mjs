@@ -63,6 +63,17 @@ export class TelegramBot {
       await this.sendMessage(
         "NAXYUS VISIONTRADE\nBot connection is active.\n\nCommands:\n/status - worker and monitoring status\n/help - show commands"
       );
+    } else if (command === "/signals") {
+      const signals = getStatus().recentSignals ?? [];
+      const text = signals.length
+        ? signals.map(item => {
+            const side = item.action === "BUY" ? "LONG" : "SHORT";
+            const rr = item.riskAccepted && Number.isFinite(item.grossRiskReward)
+              ? ` | gross RR ${item.grossRiskReward.toFixed(2)}R` : " | stop/target rejected";
+            return `${item.symbol} ${item.marketType} ${side} @ ${item.referencePrice}${rr}`;
+          }).join("\\n")
+        : "No actionable strategy signals in the latest scans.";
+      await this.sendMessage("LATEST VISIONTRADE SIGNALS\\n" + text + "\\n\\nSignal only — no exchange orders.");
     } else if (command === "/status") {
       const status = getStatus();
       await this.sendMessage(
