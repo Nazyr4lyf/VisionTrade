@@ -35,12 +35,20 @@ export class PaperTradeLedger {
       ["stopLossPrice", candidate.stopLossPrice],
       ["takeProfitPrice", candidate.takeProfitPrice],
       ["quantity", candidate.quantity],
-      ["riskBudget", candidate.riskBudget]
+      ["riskBudget", candidate.riskBudget],
+      ["netRiskReward", candidate.netRiskReward],
+      ["estimatedLossAtStop", candidate.estimatedLossAtStop]
     ];
     for (const [name, value] of requiredPositive) {
       if (!Number.isFinite(Number(value)) || Number(value) <= 0) {
         throw new Error(`Approved candidate ${name} must be positive and finite.`);
       }
+    }
+    if (Number(candidate.netRiskReward) < 2) {
+      throw new Error("Approved candidate must retain at least 2.0 net R after costs.");
+    }
+    if (Number(candidate.estimatedLossAtStop) > Number(candidate.riskBudget) + 1e-10) {
+      throw new Error("Estimated stop loss exceeds the approved risk budget.");
     }
     if (!candidate.symbol ||
         !["SPOT", "USDT_PERPETUAL"].includes(candidate.marketType) ||
@@ -61,6 +69,7 @@ export class PaperTradeLedger {
       stopLossPrice: Number(candidate.stopLossPrice),
       takeProfitPrice: Number(candidate.takeProfitPrice),
       riskBudget: Number(candidate.riskBudget),
+      estimatedLossAtStop: Number(candidate.estimatedLossAtStop),
       netRiskReward: Number(candidate.netRiskReward),
       openedAt,
       closedAt: null,
