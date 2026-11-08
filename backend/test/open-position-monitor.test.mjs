@@ -4,14 +4,14 @@ import { OpenPositionMonitor } from "../src/paper/open-position-monitor.mjs";
 
 const now = 180_000;
 const trade = {
-  id: "paper-spot-1", status: "OPEN", openedAt: 60_000,
+  id: "paper-spot-1", status: "OPEN", openedAt: 61_000,
   symbol: "BTCUSDT", marketType: "SPOT", side: "LONG",
   quantity: "0.1", entryPrice: "100", stopLossPrice: "98",
   takeProfitPrice: "104", riskBudget: "1"
 };
 const validCandle = {
   timestampMillis: 120_000, open: "100", high: "101",
-  low: "99", close: "100.5", isClosed: true
+  low: "99", close: "100.5", timeframeMinutes: 1, isClosed: true
 };
 
 function makeMonitor({ trades = [trade], candles = [validCandle], fetchError, pipelineResult } = {}) {
@@ -63,7 +63,7 @@ test("does not call exit pipeline when market data fetch fails", async () => {
 
 test("skips stale closed candle data without invoking the exit pipeline", async () => {
   const { monitor, calls } = makeMonitor({
-    candles: [{ ...validCandle, timestampMillis: 0 }]
+    candles: [{ ...validCandle, timestampMillis: 120_000 }]
   });
   const result = await monitor.runCycle({ nowMillis: 600_000 });
   assert.equal(result.skipped, 1);
@@ -105,4 +105,29 @@ test("reports closed positions from the pipeline", async () => {
   });
   const result = await monitor.runCycle({ nowMillis: now });
   assert.equal(result.closed, 1);
+});
+
+test("skips gaps in post-entry 1m candle history to avoid missing an exit touch", async () => {
+  const { monitor, calls } = makeMonitor({
+    candles: [
+      validCandle,
+      { ...validCandle, timestampMillis: 240_000 }
+    ]
+  });
+  const result = await monitor.runCycle({ nowMillis: 300_000 });
+  assert.equal(result.skipped, 1);
+  assert.equal(result.results[0].reason, "GAPPED_POST_ENTRY_CANDLE_HISTORY");
+  assert.equal(calls.processed.length, 0);
+});
+
+test("uses the entry-minute candle when trade opens exactly on a minute boundary", async () => {
+  const boundaryTrade = { ...trade, openedAt: 120_000 };
+  const { monitor, calls } = makeMonitor({
+    trades: [boundaryTrade],
+    candles: [{ ...validCandle, timestampMillis: 120_000 }]
+  });
+  const result = await monitor.runCycle({ nowMillis: 180_000 });
+  assert.equal(result.skipped, 0);
+  assert.equal(calls.fetched[0][3].start, 120_000);
+  assert.equal(calls.processed.length, 1);
 });
