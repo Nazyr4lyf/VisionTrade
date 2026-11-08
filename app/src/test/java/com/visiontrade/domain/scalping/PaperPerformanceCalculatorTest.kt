@@ -44,6 +44,8 @@ class PaperPerformanceCalculatorTest {
     private fun trade(pnl: String, r: String, timestamp: Long) = PaperExitFill(
         positionId = "paper-$timestamp",
         symbol = "BTCUSDT",
+        marketType = CryptoMarketType.SPOT,
+        side = PositionSide.LONG,
         reason = if (pnl.startsWith("-")) PaperExitReason.STOP_LOSS else PaperExitReason.TAKE_PROFIT,
         filledAtMillis = timestamp,
         referenceTriggerPrice = BigDecimal("100"),
