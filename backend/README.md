@@ -36,7 +36,20 @@ npm start
 ```
 
 
-## Render background-worker deployment
+
+## Telegram notifications (client foundation)
+
+The backend includes a small Telegram Bot API notifier with message-length validation, request timeout, and safe error messages. It is currently a tested integration component and is **not wired into the market-data worker yet**; no Telegram messages are sent automatically.
+
+To prepare the bot safely:
+1. In Telegram, open `@BotFather` and configure the bot description/about/commands.
+2. Open your new bot at `https://t.me/Naxyus_VisionTrade_Bot` and press **Start**.
+3. Obtain your numeric Telegram chat ID using a trusted method; do not post it publicly.
+4. Store `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as private repository Actions secrets (Settings → Secrets and variables → Actions). Never place the token in source code, workflow YAML, screenshots, or chat messages.
+5. If a token is ever exposed, revoke it immediately with BotFather and replace the secret.
+
+The notifier is not enabled by default. Adding secrets alone does not start a notification workflow. Paper signals, performance alerts, and worker-health alerts will be connected only after a separate notification policy and end-to-end test. The bot will never place exchange orders.
+\n## Render background-worker deployment
 
 The repository includes a root `Dockerfile` and `render.yaml` Blueprint for a dedicated, always-on Render Background Worker.
 
