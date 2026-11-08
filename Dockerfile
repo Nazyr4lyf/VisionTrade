@@ -3,7 +3,9 @@ FROM node:20-alpine AS build
 WORKDIR /app
 COPY backend/package.json ./
 COPY backend/ ./
-RUN npm test
+# Backend tests share deterministic fixtures with the Android module.
+COPY app/src/test/resources/scalping/decision-cases.json ./src/test/resources/scalping/decision-cases.json
+RUN npm test && rm -rf ./test ./src/test
 
 # Minimal non-root runtime image for an always-on Render background worker.
 FROM node:20-alpine AS runtime
