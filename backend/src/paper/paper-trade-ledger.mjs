@@ -2,7 +2,7 @@
  * Paper-only trade lifecycle coordinator.
  *
  * The injected store MUST provide atomic uniqueness for idempotencyKey and
- * one-open-position-per instrument/side, plus atomic close-if-open semantics.
+ * one-open-position-per instrument, plus atomic close-if-open semantics.
  * This module intentionally ships no in-memory production fallback: durable
  * storage is supplied by the host application and is not yet wired to worker.
  */
