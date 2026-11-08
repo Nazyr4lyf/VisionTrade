@@ -56,6 +56,27 @@ class ScalpingStrategyEngineTest {
         assertEquals(ScalpingSignalAction.NO_TRADE, result.action)
     }
 
+    @Test
+    fun futureDatedClosedCandlesReturnNoTrade() {
+        val now = 1_800_000_000_000L
+        val five = (1..100).map { index ->
+            candle(now + index * 300_000L, MarketTimeframe.FIVE_MINUTES)
+        }
+        val one = (1..60).map { index ->
+            candle(now + index * 60_000L, MarketTimeframe.ONE_MINUTE)
+        }
+        val result = engine.analyze(
+            symbol = "BTCUSDT",
+            marketType = CryptoMarketType.USDT_PERPETUAL,
+            fiveMinuteCandles = five,
+            oneMinuteCandles = one,
+            marketDataReceivedAtMillis = now,
+            nowMillis = now
+        )
+        assertEquals(ScalpingSignalAction.NO_TRADE, result.action)
+        assertEquals("A candle timestamp is in the future; market data is invalid.", result.reasons.first())
+    }
+
     private fun candle(timestamp: Long, timeframe: MarketTimeframe) = CryptoCandle(
         timestampMillis = timestamp,
         open = BigDecimal("100"),
