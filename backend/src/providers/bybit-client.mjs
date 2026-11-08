@@ -39,6 +39,7 @@ export class BybitClient {
         symbol: item.symbol,
         baseCoin: item.baseCoin,
         quoteCoin: item.quoteCoin,
+        settleCoin: item.settleCoin,
         status: item.status,
         marketType: category === "spot" ? "SPOT" : "USDT_PERPETUAL",
         priceTick: decimalString(item.priceFilter?.tickSize, "tickSize"),
@@ -67,7 +68,7 @@ export class BybitClient {
       all.push(...page.items.filter(item =>
         item.quoteCoin === "USDT" &&
         item.status === "Trading" &&
-        (category === "spot" || item.settleCoin === undefined || item.settleCoin === "USDT")
+        (category === "spot" || item.settleCoin === "USDT")
       ));
       cursor = page.nextCursor;
     } while (cursor);
