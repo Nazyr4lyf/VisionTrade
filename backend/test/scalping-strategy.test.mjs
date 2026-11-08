@@ -146,6 +146,6 @@ test("shared Android/backend decision fixtures produce identical action and regi
     });
     assert.equal(result.action, item.expectedAction, item.id);
     assert.equal(result.regime, item.expectedRegime, item.id);
-    assert.match(result.reasons.join(" ").toLowerCase(), item.expectedReasonContains.toLowerCase(), item.id);
+    assert.ok(result.reasons.join(" ").toLowerCase().includes(item.expectedReasonContains.toLowerCase()), item.id);
   }
 });
