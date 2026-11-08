@@ -206,3 +206,25 @@ test("unknown trade cannot be closed and invalid exit is rejected", async () => 
     /valid simulated exit/
   );
 });
+
+
+test("ledger preserves high-precision decimal strings for PostgreSQL NUMERIC", async () => {
+  const store = new MemoryPaperTradeStore();
+  const ledger = new PaperTradeLedger({ store });
+  const result = await ledger.openApprovedTrade({
+    approval: approved({
+      quantity: "0.000000123456789123",
+      entryPrice: "67234.123456789123",
+      stopLossPrice: "67000.000000000001",
+      takeProfitPrice: "68000.000000000009"
+    }),
+    idempotencyKey: "precision-case",
+    tradeId: "precision-case",
+    openedAt: 1000
+  });
+  assert.equal(result.created, true);
+  assert.equal(result.trade.quantity, "0.000000123456789123");
+  assert.equal(result.trade.entryPrice, "67234.123456789123");
+  assert.equal(result.trade.stopLossPrice, "67000.000000000001");
+  assert.equal(result.trade.takeProfitPrice, "68000.000000000009");
+});
