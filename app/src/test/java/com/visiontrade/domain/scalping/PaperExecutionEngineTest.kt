@@ -69,7 +69,8 @@ class PaperExecutionEngineTest {
             costs = costs
         )
 
-        val fill = engine.evaluateExit(position, candle(low = "96", high = "99"))
+        // The candle must be a valid OHLC bar: its high cannot be below its open.
+        val fill = engine.evaluateExit(position, candle(low = "96", high = "100"))
 
         assertEquals(PaperExitReason.TAKE_PROFIT, fill!!.reason)
         assertTrue(fill.netPnl > BigDecimal.ZERO)
