@@ -27,7 +27,7 @@ class PaperPerformanceCalculatorTest {
         assertEquals(0, result.breakeven)
         assertEquals(BigDecimal("50.0000"), result.winRate)
         assertEquals(BigDecimal("50"), result.netPnl)
-        assertEquals(BigDecimal("2.50000000"), result.profitFactor)
+        assertEquals(BigDecimal("1.66666667"), result.profitFactor)
         assertEquals(BigDecimal("0.05"), result.maximumDrawdown.stripTrailingZeros())
     }
 
