@@ -8,7 +8,7 @@ This Node.js 20+ worker is a backend-side market-data ingestion foundation for t
 - Spot and USDT perpetual instrument discovery.
 - Only closed 1-minute and 5-minute candles are marked eligible for strategy input.
 - No exchange API keys, private endpoints, order placement, or live trading.
-- The worker currently logs ingestion health only. It does **not** emit trading signals or write paper trades yet.
+- By default the worker logs market-data ingestion health only. An explicitly enabled, separate paper-position monitor can simulate exits for existing Spot paper positions; it never opens positions or emits trade-entry signals.
 - An isolated backend `CryptoRiskEngine` and `PaperTradeApprovalEngine` validate candidate sizing, exchange tick/step/minimums, Spot short restrictions, estimated fees/slippage/funding, the 1% equity risk budget, and the 2R net floor. They are not wired into the worker.
 - The paper-trade lifecycle coordinator and server-only Supabase PostgREST adapter are implemented.
 - The VisionTrade paper-trade schema has been deployed to the dedicated Supabase project below; the pre-existing HMS and other account projects were not modified.
