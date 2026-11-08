@@ -181,7 +181,7 @@ test("close is idempotent and preserves the simulated exit result", async () => 
   const closed = await ledger.closeTrade({ tradeId: "trade-close", exit, closedAt: 2000 });
   assert.equal(closed.closed, true);
   assert.equal(closed.trade.status, "CLOSED");
-  assert.equal(closed.trade.exit.fillPrice, 97.5);
+  assert.equal(closed.trade.exit.fillPrice, "97.5");
 
   const repeated = await ledger.closeTrade({ tradeId: "trade-close", exit, closedAt: 3000 });
   assert.equal(repeated.closed, false);
