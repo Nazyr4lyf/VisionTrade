@@ -115,6 +115,7 @@ async function scanCycle() {
       marketDataReceivedAtMillis: receivedAt,
       nowMillis: receivedAt
     });
+    signal.signalCandleTimestampMillis = oneMinute.filter(candle => candle.isClosed).at(-1)?.timestampMillis;
     let alertSent = false;
     if (notifier && !alertDeduplicator.hasSent(signal)) {
       try {
