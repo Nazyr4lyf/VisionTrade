@@ -116,9 +116,10 @@ async function scanCycle() {
       nowMillis: receivedAt
     });
     let alertSent = false;
-    if (notifier && alertDeduplicator.shouldSend(signal)) {
+    if (notifier && !alertDeduplicator.hasSent(signal)) {
       try {
         await notifier.sendMessage(formatStrategyAlert(signal));
+        alertDeduplicator.markSent(signal);
         alertSent = true;
       } catch (error) {
         console.error(JSON.stringify({
