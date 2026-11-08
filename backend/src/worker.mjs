@@ -208,7 +208,8 @@ async function main() {
       mode: "LIVE_MARKET_MONITORING",
       lastScanAt,
       lastScanPairs,
-      actionableSignals: lastSignals
+      actionableSignals: lastSignals,
+      recentSignals
     }), {
       onError: error => console.error(JSON.stringify({ event: "telegram_poll_failed", message: error.message }))
     });
