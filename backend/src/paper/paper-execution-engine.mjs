@@ -1,5 +1,3 @@
-const finitePositive = value => Number.isFinite(Number(value)) && Number(value) > 0;
-
 /**
  * Conservative paper-only OHLC exit simulator.
  * If a candle touches both stop and target, stop is assumed first.
@@ -35,7 +33,13 @@ export class PaperExecutionEngine {
       return { closed: false, reason: "INVALID_EXECUTION_COSTS" };
     }
 
-    const closed = candles.filter(c => c?.isClosed === true);
+    const openedAt = Number(trade.openedAt);
+    if (!Number.isFinite(openedAt) || openedAt <= 0) {
+      return { closed: false, reason: "INVALID_TRADE_OPEN_TIME" };
+    }
+    // Ignore any candle that began before the trade opened; its OHLC range may
+    // contain price movement from before the position existed.
+    const closed = candles.filter(c => c?.isClosed === true && c.timestampMillis >= openedAt);
     let previousTimestamp = -Infinity;
     for (const candle of closed) {
       if (!Number.isFinite(candle.timestampMillis) || candle.timestampMillis <= previousTimestamp ||
