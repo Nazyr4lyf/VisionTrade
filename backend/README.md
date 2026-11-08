@@ -37,18 +37,20 @@ npm start
 
 
 
-## Telegram notifications (client foundation)
+## Telegram bot integration
 
-The backend includes a small Telegram Bot API notifier with message-length validation, request timeout, and safe error messages. It is currently a tested integration component and is **not wired into the market-data worker yet**; no Telegram messages are sent automatically.
+The worker can connect to the Telegram Bot API using long polling. It is enabled only when both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are present.
 
-To prepare the bot safely:
-1. In Telegram, open `@BotFather` and configure the bot description/about/commands.
-2. Open your new bot at `https://t.me/Naxyus_VisionTrade_Bot` and press **Start**.
-3. Obtain your numeric Telegram chat ID using a trusted method; do not post it publicly.
-4. Store `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as private repository Actions secrets (Settings → Secrets and variables → Actions). Never place the token in source code, workflow YAML, screenshots, or chat messages.
-5. If a token is ever exposed, revoke it immediately with BotFather and replace the secret.
+- `/start` and `/help` confirm the bot connection and show available commands.
+- `/status` reports worker state, latest market-data scan time, and number of market pairs requested.
+- Commands are accepted only from the configured `TELEGRAM_CHAT_ID`; messages are sent only to that chat.
+- A startup notification confirms the worker connection.
+- Telegram is a notification/control interface only. It does not place exchange orders.
+- The worker still runs in `MARKET_DATA_ONLY` mode. Strategy signal generation is not yet connected to this worker, so no strategy alerts are claimed or sent.
 
-The notifier is not enabled by default. Adding secrets alone does not start a notification workflow. Paper signals, performance alerts, and worker-health alerts will be connected only after a separate notification policy and end-to-end test. The bot will never place exchange orders.
+Set these values in the backend host's private environment/secret settings. Never commit a bot token or put it in source code, workflow YAML, screenshots, or chat messages. If a token is exposed, revoke it with BotFather and replace it.
+
+For local testing, set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the process environment before running `npm start`. The bot uses long polling; do not run multiple pollers for the same bot token at once.
 \n## Render background-worker deployment
 
 The repository includes a root `Dockerfile` and `render.yaml` Blueprint for a dedicated, always-on Render Background Worker.
@@ -85,7 +87,7 @@ This calls only `get_paper_trade_by_id` with a reserved sentinel ID. It performs
 - `PAPER_SPOT_FEE_RATE` (required and non-negative when monitoring is enabled; decimal fraction, e.g. 0.001 means 0.1%)
 - `PAPER_SPOT_SLIPPAGE_BPS` (required and non-negative when monitoring is enabled)
 - `PAPER_MAX_CANDLE_AGE_MS` (default 180000)
-- `PAPER_MONITOR_CONCURRENCY` (default 3; range 1–10)
+- `PAPER_MONITOR_CONCURRENCY` (default 3; range 1–10)\n- `TELEGRAM_BOT_TOKEN` (optional; private Telegram bot token)\n- `TELEGRAM_CHAT_ID` (optional; allowlisted private chat ID; required with bot token)
 
 No service-role key has been added to this repository or to a client app.
 
