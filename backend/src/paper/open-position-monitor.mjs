@@ -72,7 +72,9 @@ export class OpenPositionMonitor {
       return { tradeId: trade.id, status: "SKIPPED", reason: "PERPETUAL_FUNDING_COST_MODEL_REQUIRED" };
     }
 
-    const expectedFirstCandle = Math.floor(trade.openedAt / MINUTE_MS) * MINUTE_MS + MINUTE_MS;
+    // If the trade opened exactly on a minute boundary, that candle is fully
+    // post-entry; otherwise begin with the next minute to avoid pre-entry OHLC.
+    const expectedFirstCandle = Math.ceil(trade.openedAt / MINUTE_MS) * MINUTE_MS;
     let rawCandles;
     try {
       rawCandles = await this.bybit.getKlines(category, trade.symbol, "1", {
@@ -103,6 +105,7 @@ export class OpenPositionMonitor {
     if (candles.some(candle =>
       !Number.isSafeInteger(candle.timestampMillis) ||
       candle.timestampMillis > nowMillis ||
+      candle.timeframeMinutes !== 1 ||
       candle.open === null || candle.high === null ||
       candle.low === null || candle.close === null
     )) {
@@ -114,11 +117,17 @@ export class OpenPositionMonitor {
       return { tradeId: trade.id, status: "SKIPPED", reason: "NO_CLOSED_CANDLES" };
     }
 
-    if (closedCandles[0].timestampMillis > expectedFirstCandle) {
+    const postEntryCandles = closedCandles.filter(candle => candle.timestampMillis >= expectedFirstCandle);
+    if (!postEntryCandles.length || postEntryCandles[0].timestampMillis !== expectedFirstCandle) {
       return { tradeId: trade.id, status: "SKIPPED", reason: "INSUFFICIENT_POST_ENTRY_HISTORY" };
     }
+    for (let index = 1; index < postEntryCandles.length; index += 1) {
+      if (postEntryCandles[index].timestampMillis - postEntryCandles[index - 1].timestampMillis !== MINUTE_MS) {
+        return { tradeId: trade.id, status: "SKIPPED", reason: "GAPPED_POST_ENTRY_CANDLE_HISTORY" };
+      }
+    }
 
-    const latest = closedCandles[closedCandles.length - 1];
+    const latest = postEntryCandles[postEntryCandles.length - 1];
     const latestCloseAt = latest.timestampMillis + MINUTE_MS;
     if (latestCloseAt > nowMillis || nowMillis - latestCloseAt > this.maxCandleAgeMs) {
       return { tradeId: trade.id, status: "SKIPPED", reason: "STALE_CLOSED_CANDLE_DATA" };
@@ -126,7 +135,7 @@ export class OpenPositionMonitor {
 
     const result = await this.pipeline.processOpenTrade({
       trade,
-      candles: closedCandles,
+      candles: postEntryCandles,
       costs: this.spotCosts,
       nowMillis
     });
