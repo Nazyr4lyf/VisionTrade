@@ -1,4 +1,4 @@
-export function formatStrategyAlert(signal, riskLevels = null) {
+export function formatStrategyAlert(signal, riskLevels = null, paperApproval = null, approvalConfigured = false) {
   if (!signal || !["BUY", "SELL"].includes(signal.action)) throw new Error("Only actionable strategy signals can be formatted");
   const side = signal.action === "BUY" ? "LONG" : "SHORT";
   const price = Number(signal.referencePrice);
@@ -26,7 +26,18 @@ export function formatStrategyAlert(signal, riskLevels = null) {
     "Risk analysis:",
     ...riskLines,
     "",
-    "STATUS: SIGNAL ONLY — not a paper-trade approval.",
+    paperApproval?.approved
+      ? [
+          "PAPER-TRADE APPROVAL: APPROVED (simulation candidate only)",
+          "Risk budget: " + paperApproval.risk.riskBudget,
+          "Quantity: " + paperApproval.paperTradeCandidate.quantity,
+          "Estimated loss at stop: " + paperApproval.risk.estimatedLossAtStop,
+          "Net risk/reward: " + paperApproval.risk.netRiskReward.toFixed(2) + "R"
+        ].join("\n")
+      : approvalConfigured
+        ? "PAPER-TRADE APPROVAL: REJECTED — " + (paperApproval?.rejectionReason ?? "risk gate rejected")
+        : "PAPER-TRADE APPROVAL: NOT CONFIGURED — verified equity and market costs are required.",
+    "SIGNAL ONLY unless explicitly marked as an approved paper-trade candidate.",
     "No exchange order has been placed. Live trading is disabled."
   ].join("\n");
 }
