@@ -240,7 +240,7 @@ async function main() {
     mode: "LIVE_MARKET_MONITORING",
     strategy: "RANGE_SCALPING_5M_CONTEXT_1M_CONFIRMATION",
     telegramEnabled: Boolean(notifier),
-    paperRiskApprovalConfigured: paperEquity !== null,
+    paperRiskApprovalConfigured: costsConfigured("SPOT") || costsConfigured("USDT_PERPETUAL"),
     paperPositionMonitoringEnabled,
     paperPositionEntryEnabled: false,
     liveTrading: false
