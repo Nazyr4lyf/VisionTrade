@@ -43,6 +43,8 @@ enum class PaperExitReason {
 data class PaperExitFill(
     val positionId: String,
     val symbol: String,
+    val marketType: CryptoMarketType,
+    val side: PositionSide,
     val reason: PaperExitReason,
     val filledAtMillis: Long,
     val referenceTriggerPrice: BigDecimal,
@@ -106,6 +108,8 @@ class PaperExecutionEngine {
         return PaperExitFill(
             positionId = position.id,
             symbol = position.symbol,
+            marketType = position.marketType,
+            side = position.side,
             reason = reason,
             filledAtMillis = candle.timestampMillis,
             referenceTriggerPrice = trigger,
