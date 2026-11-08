@@ -76,6 +76,46 @@ class PaperExecutionEngineTest {
         assertTrue(fill.netPnl > BigDecimal.ZERO)
     }
 
+
+    @Test
+    fun longStopGapThroughUsesWorseCandleOpenBeforeSlippage() {
+        val fill = engine.evaluateExit(
+            longPosition(),
+            candle(low = "96", high = "100", open = "97")
+        )
+
+        assertEquals(PaperExitReason.STOP_LOSS, fill!!.reason)
+        assertEquals(BigDecimal("99"), fill.referenceTriggerPrice)
+        assertEquals(BigDecimal("96.903"), fill.simulatedFillPrice)
+    }
+
+    @Test
+    fun shortStopGapThroughUsesWorseCandleOpenBeforeSlippage() {
+        val position = PaperPosition(
+            id = "paper-short-gap",
+            symbol = "BTCUSDT",
+            marketType = CryptoMarketType.USDT_PERPETUAL,
+            side = PositionSide.SHORT,
+            quantity = BigDecimal("0.1"),
+            entryPrice = BigDecimal("100"),
+            stopLossPrice = BigDecimal("101"),
+            takeProfitPrice = BigDecimal("97"),
+            contractMultiplier = BigDecimal.ONE,
+            entryFeePaid = BigDecimal("0.01"),
+            riskBudget = BigDecimal("1"),
+            costs = costs
+        )
+
+        val fill = engine.evaluateExit(
+            position,
+            candle(low = "100", high = "104", open = "103")
+        )
+
+        assertEquals(PaperExitReason.STOP_LOSS, fill!!.reason)
+        assertEquals(BigDecimal("101"), fill.referenceTriggerPrice)
+        assertEquals(BigDecimal("103.103"), fill.simulatedFillPrice)
+    }
+
     private fun longPosition() = PaperPosition(
         id = "paper-long-1",
         symbol = "BTCUSDT",
@@ -94,10 +134,11 @@ class PaperExecutionEngineTest {
     private fun candle(
         low: String,
         high: String,
-        isClosed: Boolean = true
+        isClosed: Boolean = true,
+        open: String = "100"
     ) = CryptoCandle(
         timestampMillis = 1_800_000_000_000L,
-        open = BigDecimal("100"),
+        open = BigDecimal(open),
         high = BigDecimal(high),
         low = BigDecimal(low),
         close = BigDecimal("100"),
