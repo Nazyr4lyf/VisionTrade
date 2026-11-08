@@ -6,6 +6,9 @@ import { PaperTradeLedger } from "./paper/paper-trade-ledger.mjs";
 import { PaperTradingPipeline } from "./paper/paper-trading-pipeline.mjs";
 import { OpenPositionMonitor } from "./paper/open-position-monitor.mjs";
 import { TelegramBot } from "./telegram/telegram-bot.mjs";
+import { TelegramNotifier } from "./notifications/telegram-notifier.mjs";
+import { ScalpingStrategyEngine } from "./strategy/scalping-strategy.mjs";
+import { SignalAlertDeduplicator, formatStrategyAlert } from "./strategy/signal-alerts.mjs";
 
 const intervalMs = Number(process.env.SCAN_INTERVAL_MS ?? 60_000);
 const discoveryIntervalMs = Number(process.env.DISCOVERY_INTERVAL_MS ?? 21_600_000);
@@ -19,37 +22,39 @@ function requiredNonNegativeEnv(name) {
     throw new Error(`${name} is required when paper position monitoring is enabled`);
   }
   const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) {
-    throw new Error(`${name} must be a non-negative number`);
-  }
+  if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a non-negative number`);
   return value;
 }
 
-if (!Number.isFinite(intervalMs) || intervalMs < 15_000) {
-  throw new Error("SCAN_INTERVAL_MS must be at least 15000");
-}
-if (!Number.isFinite(discoveryIntervalMs) || discoveryIntervalMs < 60_000) {
-  throw new Error("DISCOVERY_INTERVAL_MS must be at least 60000");
-}
-if (!Number.isFinite(minimumTurnoverUsd) || minimumTurnoverUsd < 0) {
-  throw new Error("MIN_TURNOVER_24H_USD must be non-negative");
-}
-if (!Number.isInteger(scanConcurrency) || scanConcurrency < 1 || scanConcurrency > 10) {
-  throw new Error("SCAN_CONCURRENCY must be an integer between 1 and 10");
-}
+if (!Number.isFinite(intervalMs) || intervalMs < 15_000) throw new Error("SCAN_INTERVAL_MS must be at least 15000");
+if (!Number.isFinite(discoveryIntervalMs) || discoveryIntervalMs < 60_000) throw new Error("DISCOVERY_INTERVAL_MS must be at least 60000");
+if (!Number.isFinite(minimumTurnoverUsd) || minimumTurnoverUsd < 0) throw new Error("MIN_TURNOVER_24H_USD must be non-negative");
+if (!Number.isInteger(scanConcurrency) || scanConcurrency < 1 || scanConcurrency > 10) throw new Error("SCAN_CONCURRENCY must be an integer between 1 and 10");
 
 const bybit = new BybitClient();
 const coinGecko = new CoinGeckoClient({ apiKey: process.env.COINGECKO_DEMO_API_KEY });
+const strategyEngine = new ScalpingStrategyEngine();
+const alertDeduplicator = new SignalAlertDeduplicator();
+let notifier = null;
+let telegramBot = null;
 let positionMonitor = null;
+
+if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+  notifier = new TelegramNotifier({
+    botToken: process.env.TELEGRAM_BOT_TOKEN,
+    chatId: process.env.TELEGRAM_CHAT_ID
+  });
+  telegramBot = new TelegramBot();
+} else if (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_CHAT_ID) {
+  throw new Error("Set both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to enable Telegram");
+}
 
 if (paperPositionMonitoringEnabled) {
   const store = new SupabasePaperTradeStore();
   const ledger = new PaperTradeLedger({ store });
   const pipeline = new PaperTradingPipeline({ enabled: true, ledger });
   positionMonitor = new OpenPositionMonitor({
-    ledger,
-    pipeline,
-    bybit,
+    ledger, pipeline, bybit,
     spotCosts: {
       feeRate: requiredNonNegativeEnv("PAPER_SPOT_FEE_RATE"),
       slippageBps: requiredNonNegativeEnv("PAPER_SPOT_SLIPPAGE_BPS")
@@ -58,19 +63,14 @@ if (paperPositionMonitoringEnabled) {
     concurrency: Number(process.env.PAPER_MONITOR_CONCURRENCY ?? 3)
   });
 }
+
 let stopping = false;
 let lastDiscoveryAt = 0;
 let discovery = [];
 let lastScanAt = null;
 let lastScanPairs = 0;
-let telegramBot = null;
+let lastSignals = 0;
 let telegramTask = null;
-
-if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
-  telegramBot = new TelegramBot();
-} else if (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_CHAT_ID) {
-  throw new Error("Set both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to enable Telegram");
-}
 
 async function refreshDiscovery() {
   const [spot, perpetual] = await Promise.all([
@@ -78,71 +78,77 @@ async function refreshDiscovery() {
     bybit.getAllUsdtInstruments("linear")
   ]);
   const [spotTickers, perpetualTickers, coins] = await Promise.all([
-    bybit.getTickers("spot"),
-    bybit.getTickers("linear"),
-    coinGecko.getUsdtMarketDiscovery()
+    bybit.getTickers("spot"), bybit.getTickers("linear"), coinGecko.getUsdtMarketDiscovery()
   ]);
-
   const coinSymbols = new Set(coins.map(coin => coin.symbol));
   const spotTurnover = new Map(spotTickers.map(ticker => [ticker.symbol, Number(ticker.turnover24h)]));
   const perpetualTurnover = new Map(perpetualTickers.map(ticker => [ticker.symbol, Number(ticker.turnover24h)]));
-
   discovery = [
-    ...spot.map(item => ({
-      symbol: item.symbol,
-      market: "spot",
-      turnover24hUsd: spotTurnover.get(item.symbol) ?? 0
-    })),
-    ...perpetual.map(item => ({
-      symbol: item.symbol,
-      market: "linear",
-      turnover24hUsd: perpetualTurnover.get(item.symbol) ?? 0
-    }))
-  ]
-    .filter(item =>
-      coinSymbols.has(item.symbol.replace(/USDT$/, "")) &&
-      Number.isFinite(item.turnover24hUsd) &&
-      item.turnover24hUsd >= minimumTurnoverUsd
-    )
-    .sort((a, b) => b.turnover24hUsd - a.turnover24hUsd);
+    ...spot.map(item => ({ ...item, market: "spot", turnover24hUsd: spotTurnover.get(item.symbol) ?? 0 })),
+    ...perpetual.map(item => ({ ...item, market: "linear", turnover24hUsd: perpetualTurnover.get(item.symbol) ?? 0 }))
+  ].filter(item =>
+    coinSymbols.has(item.symbol.replace(/USDT$/, "")) &&
+    Number.isFinite(item.turnover24hUsd) && item.turnover24hUsd >= minimumTurnoverUsd
+  ).sort((a, b) => b.turnover24hUsd - a.turnover24hUsd);
 
   lastDiscoveryAt = Date.now();
   console.info(JSON.stringify({
-    event: "discovery_refreshed",
-    eligibleMarketPairs: discovery.length,
+    event: "discovery_refreshed", eligibleMarketPairs: discovery.length,
     at: new Date(lastDiscoveryAt).toISOString()
   }));
 }
 
 async function scanCycle() {
   if (Date.now() - lastDiscoveryAt >= discoveryIntervalMs) await refreshDiscovery();
-
-  // Market-data collection only. Strategy parity and paper-ledger persistence
-  // must pass their own tests before signal generation is enabled.
-  const sample = discovery.slice(0, 30);
+  const sample = discovery.slice(0, Number(process.env.MAX_MARKET_PAIRS ?? 30));
   const results = await mapWithConcurrency(sample, scanConcurrency, async item => {
     const [oneMinute, fiveMinute] = await Promise.all([
       bybit.getKlines(item.market, item.symbol, "1", { limit: 120 }),
       bybit.getKlines(item.market, item.symbol, "5", { limit: 120 })
     ]);
-    return {
+    const receivedAt = Date.now();
+    const signal = strategyEngine.analyze({
       symbol: item.symbol,
-      market: item.market === "spot" ? "SPOT" : "USDT_PERPETUAL",
+      marketType: item.marketType,
+      oneMinuteCandles: oneMinute,
+      fiveMinuteCandles: fiveMinute,
+      marketDataReceivedAtMillis: receivedAt,
+      nowMillis: receivedAt
+    });
+    let alertSent = false;
+    if (notifier && alertDeduplicator.shouldSend(signal)) {
+      try {
+        await notifier.sendMessage(formatStrategyAlert(signal));
+        alertSent = true;
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: "telegram_signal_delivery_failed",
+          symbol: item.symbol, marketType: item.marketType, message: error.message
+        }));
+      }
+    }
+    return {
+      symbol: item.symbol, marketType: item.marketType,
       oneMinuteClosed: oneMinute.filter(candle => candle.isClosed).length,
-      fiveMinuteClosed: fiveMinute.filter(candle => candle.isClosed).length
+      fiveMinuteClosed: fiveMinute.filter(candle => candle.isClosed).length,
+      action: signal.action, alertSent
     };
   });
 
-  const successful = results.filter(result => result.status === "fulfilled").length;
+  const fulfilled = results.filter(result => result.status === "fulfilled").map(result => result.value);
+  const successful = fulfilled.length;
+  lastSignals = fulfilled.filter(item => item.action !== "NO_TRADE").length;
   lastScanAt = new Date().toISOString();
   lastScanPairs = sample.length;
   console.info(JSON.stringify({
-    event: "market_data_cycle",
+    event: "strategy_scan_cycle",
     marketPairsRequested: sample.length,
     scanConcurrency,
     marketPairsSucceeded: successful,
     marketPairsFailed: results.length - successful,
-    at: new Date().toISOString()
+    actionableSignals: lastSignals,
+    telegramAlertsSent: fulfilled.filter(item => item.alertSent).length,
+    at: lastScanAt
   }));
 }
 
@@ -163,11 +169,26 @@ function waitForNextCycle(milliseconds) {
 async function main() {
   console.info(JSON.stringify({
     event: "worker_started",
-    mode: "MARKET_DATA_ONLY",
+    mode: "LIVE_MARKET_MONITORING",
+    strategy: "RANGE_SCALPING_5M_CONTEXT_1M_CONFIRMATION",
+    telegramEnabled: Boolean(notifier),
     paperPositionMonitoringEnabled,
     paperPositionEntryEnabled: false,
     liveTrading: false
   }));
+  if (telegramBot) {
+    telegramTask = telegramBot.start(() => ({
+      running: !stopping,
+      mode: "LIVE_MARKET_MONITORING",
+      lastScanAt,
+      lastScanPairs,
+      actionableSignals: lastSignals
+    }), {
+      onError: error => console.error(JSON.stringify({ event: "telegram_poll_failed", message: error.message }))
+    });
+    notifier.sendMessage("NAXYUS VISIONTRADE is online. Live market monitoring and strategy scanning are starting. Live orders are disabled.")
+      .catch(error => console.error(JSON.stringify({ event: "telegram_startup_notice_failed", message: error.message })));
+  }
   while (!stopping) {
     const started = Date.now();
     try {
@@ -180,17 +201,11 @@ async function main() {
         const result = await positionMonitor.runCycle({ nowMillis: Date.now() });
         console.info(JSON.stringify({
           event: "paper_position_monitor_cycle",
-          openPositions: result.openPositions,
-          closed: result.closed,
-          skipped: result.skipped,
-          failed: result.failed,
-          at: new Date().toISOString()
+          openPositions: result.openPositions, closed: result.closed,
+          skipped: result.skipped, failed: result.failed, at: new Date().toISOString()
         }));
       } catch (error) {
-        console.error(JSON.stringify({
-          event: "paper_position_monitor_failed",
-          message: error.message
-        }));
+        console.error(JSON.stringify({ event: "paper_position_monitor_failed", message: error.message }));
       }
     }
     const remaining = Math.max(0, intervalMs - (Date.now() - started));
