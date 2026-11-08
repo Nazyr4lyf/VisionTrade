@@ -3,7 +3,9 @@ name: Backend CI
 on:
   push:
     branches:
+      - main
       - feature/crypto-scalping-foundation
+      - feature/live-monitoring-snapshot
     paths:
       - "backend/**"
       - "Dockerfile"

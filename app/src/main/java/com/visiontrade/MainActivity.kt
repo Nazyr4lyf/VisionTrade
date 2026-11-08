@@ -84,6 +84,10 @@ VisionTradeTheme {
                             currentScreen = "manual"
                         },
 
+                        onLiveMonitoring = {
+                            currentScreen = "live_monitoring"
+                        },
+
                         onRiskCalculator = {
                             currentScreen = "risk"
                         },
@@ -174,6 +178,14 @@ VisionTradeTheme {
 
 
                     // =========================================
+                    // LIVE MARKET MONITORING
+                    // =========================================
+
+                    "live_monitoring" -> LiveMonitoringScreen(
+                        onBackClick = { currentScreen = "main" }
+                    )
+
+                    // =========================================
                     // RISK CALCULATOR
                     // =========================================
 
@@ -252,6 +264,10 @@ VisionTradeTheme {
 
                         onManualData = {
                             currentScreen = "manual"
+                        },
+
+                        onLiveMonitoring = {
+                            currentScreen = "live_monitoring"
                         },
 
                         onRiskCalculator = {

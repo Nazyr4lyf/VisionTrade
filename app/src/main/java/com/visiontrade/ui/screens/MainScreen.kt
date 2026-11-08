@@ -59,6 +59,7 @@ fun MainScreen(
     onAnalyzeScreenshot: () -> Unit,
     onScanCamera: () -> Unit,
     onManualData: () -> Unit,
+    onLiveMonitoring: () -> Unit,
     onRiskCalculator: () -> Unit,
     onFlippingSimulator: () -> Unit,
     onHistory: () -> Unit,
@@ -246,6 +247,12 @@ fun MainScreen(
                     PrimaryButton(
                         text = "Manual Data Entry",
                         onClick = onManualData,
+                        modifier = Modifier.padding(vertical = 5.dp)
+                    )
+
+                    PrimaryButton(
+                        text = "LIVE MARKET MONITORING",
+                        onClick = onLiveMonitoring,
                         modifier = Modifier.padding(vertical = 5.dp)
                     )
 

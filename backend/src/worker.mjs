@@ -12,6 +12,7 @@ import { SignalAlertDeduplicator, formatStrategyAlert } from "./strategy/signal-
 import { calculateIndicators } from "./strategy/indicators.mjs";
 import { StopTargetEngine } from "./risk/stop-target-engine.mjs";
 import { PaperTradeApprovalEngine } from "./risk/paper-trade-approval-engine.mjs";
+import { SupabaseMonitorSnapshotStore } from "./monitoring/supabase-monitor-snapshot-store.mjs";
 
 const intervalMs = Number(process.env.SCAN_INTERVAL_MS ?? 60_000);
 const discoveryIntervalMs = Number(process.env.DISCOVERY_INTERVAL_MS ?? 21_600_000);
@@ -40,6 +41,7 @@ const strategyEngine = new ScalpingStrategyEngine();
 const alertDeduplicator = new SignalAlertDeduplicator();
 const stopTargetEngine = new StopTargetEngine();
 const paperApprovalEngine = new PaperTradeApprovalEngine();
+const monitorSnapshotStore = new SupabaseMonitorSnapshotStore();
 
 function optionalRate(name) {
   const raw = process.env[name];
@@ -135,6 +137,24 @@ async function refreshDiscovery() {
     event: "discovery_refreshed", eligibleMarketPairs: discovery.length,
     at: new Date(lastDiscoveryAt).toISOString()
   }));
+}
+
+async function publishMonitorSnapshot(running = !stopping) {
+  try {
+    const result = await monitorSnapshotStore.publish({
+      running,
+      mode: "LIVE_MARKET_MONITORING",
+      lastScanAt,
+      lastScanPairs,
+      actionableSignals: lastSignals,
+      recentSignals
+    });
+    if (!result.skipped) {
+      console.info(JSON.stringify({ event: "monitor_snapshot_published", updatedAt: result.updatedAt }));
+    }
+  } catch (error) {
+    console.error(JSON.stringify({ event: "monitor_snapshot_publish_failed", message: error.message }));
+  }
 }
 
 async function scanCycle() {
