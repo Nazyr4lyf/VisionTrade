@@ -23,7 +23,7 @@ test("includes validated stop, target and gross R in risk analysis", () => {
   assert.match(message, /Candidate stop-loss: 64700/);
   assert.match(message, /Candidate take-profit: 65700/);
   assert.match(message, /2.50R/);
-  assert.match(message, /pending equity and verified fee\/slippage/);
+  assert.match(message, /PAPER-TRADE APPROVAL: NOT CONFIGURED/);
 });
 
 test("rejects NO_TRADE and invalid prices", () => {
@@ -39,4 +39,23 @@ test("deduplicates the same symbol, market, action and evaluated candle", () => 
   assert.equal(dedupe.hasSent({ ...signal, signalCandleTimestampMillis: signal.signalCandleTimestampMillis + 60_000 }), false);
   assert.equal(dedupe.hasSent({ ...signal, marketType: "USDT_PERPETUAL" }), false);
   assert.equal(dedupe.hasSent({ ...signal, action: "NO_TRADE" }), false);
+});
+
+test("reports a successful 1% net-risk paper approval without implying a live order", () => {
+  const message = formatStrategyAlert(signal, { accepted: true, stopLossPrice: 64700, takeProfitPrice: 65700, grossRiskReward: 2.5 }, {
+    approved: true,
+    risk: { riskBudget: 100, estimatedLossAtStop: 95, netRiskReward: 2.2 },
+    paperTradeCandidate: { quantity: 0.25 }
+  }, true);
+  assert.match(message, /PAPER-TRADE APPROVAL: APPROVED/);
+  assert.match(message, /Risk budget: 100/);
+  assert.match(message, /Quantity: 0.25/);
+  assert.match(message, /Net risk\/reward: 2.20R/);
+  assert.match(message, /No exchange order has been placed/);
+});
+
+test("reports configured risk rejection distinctly from unconfigured approval", () => {
+  const message = formatStrategyAlert(signal, null, { approved: false, rejectionReason: "Net risk/reward below 2R." }, true);
+  assert.match(message, /PAPER-TRADE APPROVAL: REJECTED/);
+  assert.match(message, /below 2R/);
 });
