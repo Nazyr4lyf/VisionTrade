@@ -4,7 +4,7 @@ import { PaperExecutionEngine } from "../src/paper/paper-execution-engine.mjs";
 
 const engine = new PaperExecutionEngine();
 const trade = (overrides = {}) => ({
-  id: "paper-1", status: "OPEN", symbol: "BTCUSDT", marketType: "SPOT",
+  id: "paper-1", status: "OPEN", openedAt: 1, symbol: "BTCUSDT", marketType: "SPOT",
   side: "LONG", quantity: "0.1", entryPrice: "100",
   stopLossPrice: "98", takeProfitPrice: "104", riskBudget: "1",
   ...overrides
@@ -94,4 +94,14 @@ test("non-open trade cannot be evaluated", () => {
   assert.equal(engine.evaluateExit({
     trade: trade({ status: "CLOSED" }), candles: [candle()]
   }).reason, "TRADE_NOT_OPEN");
+});
+
+
+test("candles that started before the trade opened cannot trigger an exit", () => {
+  const result = engine.evaluateExit({
+    trade: trade({ openedAt: 60_001 }),
+    candles: [candle({ timestampMillis: 60_000, low: 90, high: 110 })]
+  });
+  assert.equal(result.closed, false);
+  assert.equal(result.reason, "EXIT_NOT_HIT");
 });
