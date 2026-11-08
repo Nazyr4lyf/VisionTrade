@@ -64,13 +64,14 @@ export class PaperTradeLedger {
       symbol: candidate.symbol,
       marketType: candidate.marketType,
       side: candidate.side,
-      quantity: Number(candidate.quantity),
-      entryPrice: Number(candidate.entryPrice),
-      stopLossPrice: Number(candidate.stopLossPrice),
-      takeProfitPrice: Number(candidate.takeProfitPrice),
-      riskBudget: Number(candidate.riskBudget),
-      estimatedLossAtStop: Number(candidate.estimatedLossAtStop),
-      netRiskReward: Number(candidate.netRiskReward),
+      // Preserve decimal input text across the JSON/Postgres NUMERIC boundary.
+      quantity: String(candidate.quantity),
+      entryPrice: String(candidate.entryPrice),
+      stopLossPrice: String(candidate.stopLossPrice),
+      takeProfitPrice: String(candidate.takeProfitPrice),
+      riskBudget: String(candidate.riskBudget),
+      estimatedLossAtStop: String(candidate.estimatedLossAtStop),
+      netRiskReward: String(candidate.netRiskReward),
       openedAt,
       closedAt: null,
       exit: null
@@ -105,9 +106,9 @@ export class PaperTradeLedger {
       closedAt,
       exit: {
         reason: exit.reason,
-        fillPrice: Number(exit.fillPrice),
-        netPnl: Number(exit.netPnl),
-        realizedR: Number(exit.realizedR)
+        fillPrice: String(exit.fillPrice),
+        netPnl: String(exit.netPnl),
+        realizedR: String(exit.realizedR)
       }
     };
     return this.store.closeIfOpen(tradeId, closure);
