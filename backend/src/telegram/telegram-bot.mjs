@@ -71,7 +71,10 @@ export class TelegramBot {
             const rr = item.riskAccepted && Number.isFinite(item.grossRiskReward)
               ? " | gross RR " + item.grossRiskReward.toFixed(2) + "R"
               : " | stop/target rejected";
-            return item.symbol + " " + item.marketType + " " + side + " @ " + item.referencePrice + rr;
+            const levels = item.riskAccepted
+              ? " | SL " + item.stopLossPrice + " | TP " + item.takeProfitPrice
+              : " | risk validation: " + (item.riskReason ?? "rejected");
+            return item.symbol + " " + item.marketType + " " + side + " @ " + item.referencePrice + rr + levels;
           }).join("\n")
         : "No actionable strategy signals in the latest scans.";
       await this.sendMessage("LATEST VISIONTRADE SIGNALS\n" + lines + "\n\nSignal only — no exchange orders.");
