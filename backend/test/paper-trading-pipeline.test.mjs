@@ -160,3 +160,59 @@ test("paper exit simulation leaves ledger untouched until a closed candle hits a
   assert.equal(result.status, "POSITION_OPEN");
   assert.equal(closeCalls, 0);
 });
+
+test("batch open-position processing retrieves durable positions and closes simulated exits", async () => {
+  const trade = {
+    id: "batch-open-1", status: "OPEN", openedAt: 1,
+    symbol: "BTCUSDT", marketType: "SPOT", side: "LONG",
+    quantity: "0.1", entryPrice: "100", stopLossPrice: "98",
+    takeProfitPrice: "104", riskBudget: "1"
+  };
+  const closed = [];
+  let listCalls = 0;
+  const ledger = {
+    async openApprovedTrade() { return { created: true }; },
+    async listOpenTrades() { listCalls++; return [trade]; },
+    async closeTrade(input) {
+      closed.push(input);
+      return { closed: true, reason: null, trade: { ...trade, status: "CLOSED" } };
+    }
+  };
+  const pipeline = new PaperTradingPipeline({ enabled: true, ledger });
+  const result = await pipeline.processOpenPositions({
+    marketDataByInstrument: {
+      "BTCUSDT|SPOT": {
+        candles: [{
+          timestampMillis: 60_000, open: 100, high: 101, low: 97,
+          close: 99, isClosed: true
+        }]
+      }
+    },
+    costsByInstrument: { "BTCUSDT|SPOT": { feeRate: 0.001 } },
+    nowMillis: 120_000
+  });
+  assert.equal(listCalls, 1);
+  assert.equal(result.status, "PROCESSED");
+  assert.equal(result.processed, 1);
+  assert.equal(result.results[0].status, "PAPER_TRADE_CLOSED");
+  assert.equal(closed.length, 1);
+  assert.equal(closed[0].tradeId, "batch-open-1");
+});
+
+test("batch open-position processing skips trades without matching market data", async () => {
+  const ledger = {
+    async openApprovedTrade() { return { created: true }; },
+    async listOpenTrades() {
+      return [{
+        id: "missing-market-data", status: "OPEN",
+        symbol: "ETHUSDT", marketType: "SPOT"
+      }];
+    },
+    async closeTrade() { throw new Error("must not close without candles"); }
+  };
+  const pipeline = new PaperTradingPipeline({ enabled: true, ledger });
+  const result = await pipeline.processOpenPositions();
+  assert.equal(result.processed, 1);
+  assert.equal(result.results[0].status, "SKIPPED");
+  assert.equal(result.results[0].reason, "OPEN_POSITION_MARKET_DATA_UNAVAILABLE");
+});
