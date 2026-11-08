@@ -123,3 +123,30 @@ test("does not leak credentials and surfaces safe HTTP errors", async () => {
   });
   await assert.rejects(store.findById("trade-1"), /permission denied/);
 });
+
+test("listOpenTrades calls the service-only RPC and maps exact decimal strings", async () => {
+  let request;
+  const store = new SupabasePaperTradeStore({
+    url: "https://visiontrade.supabase.co",
+    serviceRoleKey: "server-secret",
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return response([tradeRow]);
+    }
+  });
+  const trades = await store.listOpenTrades();
+  assert.equal(request.url, "https://visiontrade.supabase.co/rest/v1/rpc/list_open_paper_trades");
+  assert.deepEqual(JSON.parse(request.options.body), {});
+  assert.equal(trades.length, 1);
+  assert.equal(trades[0].status, "OPEN");
+  assert.equal(trades[0].quantity, "0.100000000000000019");
+});
+
+test("listOpenTrades rejects malformed RPC payloads", async () => {
+  const store = new SupabasePaperTradeStore({
+    url: "https://visiontrade.supabase.co",
+    serviceRoleKey: "server-secret",
+    fetchImpl: async () => response({ unexpected: true })
+  });
+  await assert.rejects(store.listOpenTrades(), /invalid open paper-trade list/);
+});
