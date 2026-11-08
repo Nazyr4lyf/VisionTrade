@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { calculateIndicators } from "../strategy/indicators.mjs";
 import { ScalpingStrategyEngine } from "../strategy/scalping-strategy.mjs";
 import { PaperTradeApprovalEngine } from "../risk/paper-trade-approval-engine.mjs";
+import { PaperExecutionEngine } from "./paper-execution-engine.mjs";
 
 /**
  * Explicitly gated composition of closed-candle strategy, risk approval and
@@ -13,6 +14,7 @@ export class PaperTradingPipeline {
     enabled = false,
     strategyEngine = new ScalpingStrategyEngine(),
     approvalEngine = new PaperTradeApprovalEngine(),
+    executionEngine = new PaperExecutionEngine(),
     ledger,
     idFactory = randomUUID
   } = {}) {
@@ -22,6 +24,7 @@ export class PaperTradingPipeline {
     this.enabled = enabled;
     this.strategyEngine = strategyEngine;
     this.approvalEngine = approvalEngine;
+    this.executionEngine = executionEngine;
     this.ledger = ledger ?? null;
     this.idFactory = idFactory;
   }
