@@ -114,6 +114,9 @@ export class ScalpingStrategyEngine {
 
     const five = fiveMinuteCandles.filter(c => c.isClosed).slice().sort((a,b)=>a.timestampMillis-b.timestampMillis);
     const one = oneMinuteCandles.filter(c => c.isClosed).slice().sort((a,b)=>a.timestampMillis-b.timestampMillis);
+    if (five.some(c => c.timestampMillis > nowMillis) || one.some(c => c.timestampMillis > nowMillis)) {
+      return noTrade(symbol, marketType, "A candle timestamp is in the future; market data is invalid.", nowMillis);
+    }
     if (five.length < this.config.fiveMinuteLookback || one.length < this.config.oneMinuteLookback) {
       return noTrade(symbol, marketType, "Insufficient closed-candle history for the 5m/1m strategy.", nowMillis);
     }
