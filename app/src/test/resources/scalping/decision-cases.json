@@ -1,0 +1,72 @@
+[
+  {
+    "id": "stale-market-data",
+    "marketType": "SPOT",
+    "receivedAtOffsetMillis": -10000,
+    "fiveCount": 120,
+    "oneCount": 120,
+    "fiveTimeframeMinutes": 5,
+    "oneTimeframeMinutes": 1,
+    "fivePattern": "RANGE",
+    "futureCandles": false,
+    "expectedAction": "NO_TRADE",
+    "expectedRegime": "UNKNOWN",
+    "expectedReasonContains": "stale"
+  },
+  {
+    "id": "insufficient-history",
+    "marketType": "USDT_PERPETUAL",
+    "receivedAtOffsetMillis": -100,
+    "fiveCount": 20,
+    "oneCount": 20,
+    "fiveTimeframeMinutes": 5,
+    "oneTimeframeMinutes": 1,
+    "fivePattern": "RANGE",
+    "futureCandles": false,
+    "expectedAction": "NO_TRADE",
+    "expectedRegime": "UNKNOWN",
+    "expectedReasonContains": "Insufficient"
+  },
+  {
+    "id": "wrong-structure-timeframe",
+    "marketType": "SPOT",
+    "receivedAtOffsetMillis": -100,
+    "fiveCount": 120,
+    "oneCount": 120,
+    "fiveTimeframeMinutes": 1,
+    "oneTimeframeMinutes": 1,
+    "fivePattern": "RANGE",
+    "futureCandles": false,
+    "expectedAction": "NO_TRADE",
+    "expectedRegime": "UNKNOWN",
+    "expectedReasonContains": "timeframe"
+  },
+  {
+    "id": "future-dated-candles",
+    "marketType": "USDT_PERPETUAL",
+    "receivedAtOffsetMillis": -100,
+    "fiveCount": 120,
+    "oneCount": 120,
+    "fiveTimeframeMinutes": 5,
+    "oneTimeframeMinutes": 1,
+    "fivePattern": "RANGE",
+    "futureCandles": true,
+    "expectedAction": "NO_TRADE",
+    "expectedRegime": "UNKNOWN",
+    "expectedReasonContains": "future"
+  },
+  {
+    "id": "strong-five-minute-trend",
+    "marketType": "USDT_PERPETUAL",
+    "receivedAtOffsetMillis": -100,
+    "fiveCount": 120,
+    "oneCount": 120,
+    "fiveTimeframeMinutes": 5,
+    "oneTimeframeMinutes": 1,
+    "fivePattern": "TREND",
+    "futureCandles": false,
+    "expectedAction": "NO_TRADE",
+    "expectedRegime": "TRENDING",
+    "expectedReasonContains": "strong trend"
+  }
+]
