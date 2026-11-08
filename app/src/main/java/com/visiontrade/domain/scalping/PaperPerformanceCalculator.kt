@@ -20,11 +20,13 @@ class PaperPerformanceCalculator {
 
     fun calculate(
         initialEquity: BigDecimal,
-        closedTrades: List<PaperExitFill>
+        closedTrades: List<PaperExitFill>,
+        marketType: CryptoMarketType? = null
     ): PaperPerformanceMetrics {
         require(initialEquity > BigDecimal.ZERO) { "Initial equity must be positive." }
+        val selectedTrades = closedTrades.filter { marketType == null || it.marketType == marketType }
 
-        if (closedTrades.isEmpty()) {
+        if (selectedTrades.isEmpty()) {
             return PaperPerformanceMetrics(
                 tradeCount = 0,
                 wins = 0,
@@ -39,7 +41,7 @@ class PaperPerformanceCalculator {
             )
         }
 
-        val ordered = closedTrades.sortedBy { it.filledAtMillis }
+        val ordered = selectedTrades.sortedBy { it.filledAtMillis }
         val wins = ordered.count { it.netPnl > BigDecimal.ZERO }
         val losses = ordered.count { it.netPnl < BigDecimal.ZERO }
         val breakeven = ordered.size - wins - losses
