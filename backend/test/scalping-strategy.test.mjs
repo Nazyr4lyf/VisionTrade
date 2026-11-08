@@ -96,3 +96,17 @@ test("confirmed support/resistance zones require right-side confirmation and rep
   const zones = detectZones(rows, { leftBars: 1, rightBars: 1, tolerance: 0.3, minimumTouches: 2 });
   assert.ok(zones.some(item => item.type === "RESISTANCE" && item.zone.touches >= 2));
 });
+
+
+test("future-dated closed candles fail closed with NO_TRADE", () => {
+  const futureFive = history(5, 100, i => 100 + Math.sin(i / 3))
+    .map((c, i) => ({ ...c, timestampMillis: NOW + (i + 1) * 5 * 60_000 }));
+  const futureOne = history(1, 60, i => 100 + Math.sin(i / 2))
+    .map((c, i) => ({ ...c, timestampMillis: NOW + (i + 1) * 60_000 }));
+  const result = new ScalpingStrategyEngine().analyze(input({
+    fiveMinuteCandles: futureFive,
+    oneMinuteCandles: futureOne
+  }));
+  assert.equal(result.action, "NO_TRADE");
+  assert.match(result.reasons[0], /future/);
+});
