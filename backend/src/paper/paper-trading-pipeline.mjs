@@ -29,6 +29,41 @@ export class PaperTradingPipeline {
     this.idFactory = idFactory;
   }
 
+  async processOpenTrade({ trade, candles, costs = {}, nowMillis = Date.now() }) {
+    if (!this.enabled) {
+      return { status: "DISABLED", reason: "PAPER_PIPELINE_DISABLED", simulation: null, ledger: null };
+    }
+    if (!this.ledger || typeof this.ledger.closeTrade !== "function") {
+      throw new Error("An enabled paper pipeline requires a ledger with closeTrade support.");
+    }
+    const simulation = this.executionEngine.evaluateExit({
+      trade,
+      candles,
+      feeRate: costs.feeRate ?? 0,
+      slippageBps: costs.slippageBps ?? 0,
+      fundingCost: costs.fundingCost ?? 0
+    });
+    if (!simulation.closed) {
+      return { status: "POSITION_OPEN", reason: simulation.reason, simulation, ledger: null };
+    }
+    const ledger = await this.ledger.closeTrade({
+      tradeId: trade.id,
+      exit: {
+        reason: simulation.reason,
+        fillPrice: simulation.fillPrice,
+        netPnl: simulation.netPnl,
+        realizedR: simulation.realizedR
+      },
+      closedAt: nowMillis
+    });
+    return {
+      status: ledger.closed ? "PAPER_TRADE_CLOSED" : "PAPER_TRADE_NOT_CLOSED",
+      reason: ledger.reason,
+      simulation,
+      ledger
+    };
+  }
+
   async processSnapshot({
     symbol, marketType, fiveMinuteCandles, oneMinuteCandles,
     instrument, equity, costs = {},
