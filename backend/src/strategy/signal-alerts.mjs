@@ -1,4 +1,4 @@
-export function formatStrategyAlert(signal) {
+export function formatStrategyAlert(signal, riskLevels = null) {
   if (!signal || !["BUY", "SELL"].includes(signal.action)) throw new Error("Only actionable strategy signals can be formatted");
   const side = signal.action === "BUY" ? "LONG" : "SHORT";
   const price = Number(signal.referencePrice);
@@ -6,6 +6,14 @@ export function formatStrategyAlert(signal) {
   const zone = signal.action === "BUY" ? signal.supportZone : signal.resistanceZone;
   const zoneText = zone && Number.isFinite(Number(zone.low)) && Number.isFinite(Number(zone.high))
     ? `${zone.low} – ${zone.high}` : "not available";
+  const riskLines = riskLevels?.accepted
+    ? [
+        `Candidate stop-loss: ${riskLevels.stopLossPrice}`,
+        `Candidate take-profit: ${riskLevels.takeProfitPrice}`,
+        `Gross risk/reward: ${Number(riskLevels.grossRiskReward).toFixed(2)}R`,
+        "Account risk sizing: pending equity and verified fee/slippage settings."
+      ]
+    : [`Stop/target validation: REJECTED — ${riskLevels?.rejectionReason ?? "not calculated"}`];
   return [
     "🔔 NAXYUS VISIONTRADE — STRATEGY SIGNAL",
     `${signal.symbol} | ${signal.marketType} | ${side}`,
@@ -15,6 +23,9 @@ export function formatStrategyAlert(signal) {
     "Strategy confirmations:",
     ...signal.reasons.map(reason => `• ${reason}`),
     "",
+    "Risk analysis:",
+    ...riskLines,
+    "",
     "STATUS: SIGNAL ONLY — not a paper-trade approval.",
     "No exchange order has been placed. Live trading is disabled."
   ].join("\n");
@@ -22,19 +33,16 @@ export function formatStrategyAlert(signal) {
 
 export class SignalAlertDeduplicator {
   constructor() { this.lastAlertByKey = new Map(); }
-
   fingerprint(signal) {
     if (!signal || !["BUY", "SELL"].includes(signal.action)) return null;
     const candleTime = Number(signal.signalCandleTimestampMillis ?? signal.evaluatedAtMillis);
     if (!Number.isSafeInteger(candleTime) || candleTime <= 0) return null;
     return { key: `${signal.marketType}:${signal.symbol}`, value: `${signal.action}:${candleTime}` };
   }
-
   hasSent(signal) {
     const item = this.fingerprint(signal);
     return item ? this.lastAlertByKey.get(item.key) === item.value : false;
   }
-
   markSent(signal) {
     const item = this.fingerprint(signal);
     if (item) this.lastAlertByKey.set(item.key, item.value);
