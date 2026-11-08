@@ -12,7 +12,9 @@ data class TradingCostModel(
     init {
         require(entryFeeRate >= BigDecimal.ZERO) { "Entry fee cannot be negative." }
         require(exitFeeRate >= BigDecimal.ZERO) { "Exit fee cannot be negative." }
-        require(slippageRatePerSide >= BigDecimal.ZERO) { "Slippage cannot be negative." }
+        require(slippageRatePerSide >= BigDecimal.ZERO && slippageRatePerSide < BigDecimal.ONE) {
+            "Slippage rate must be at least zero and below 100%."
+        }
         require(fundingRateAllowance >= BigDecimal.ZERO) { "Funding allowance cannot be negative." }
     }
 }
@@ -52,6 +54,11 @@ class CryptoRiskEngine(
         if (request.equity <= zero || request.entryPrice <= zero ||
             request.stopLossPrice <= zero || request.takeProfitPrice <= zero
         ) return reject("Equity, entry, stop-loss and take-profit must be positive.")
+
+        val tick = request.instrument.priceTick
+        if (listOf(request.entryPrice, request.stopLossPrice, request.takeProfitPrice)
+                .any { it.remainder(tick).compareTo(BigDecimal.ZERO) != 0 }
+        ) return reject("Entry, stop-loss and take-profit prices must align to the exchange tick size.")
 
         if (request.instrument.marketType == CryptoMarketType.SPOT &&
             request.side == PositionSide.SHORT
