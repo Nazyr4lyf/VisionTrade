@@ -32,7 +32,7 @@ test("only configured chat can issue commands and /status returns worker status"
   const bot = new TelegramBot({
     token: "test-token",
     chatId: "12345",
-    fetchImpl: async (_url, options) => {
+    fetchImpl: async (url, options) => {
       sent.push(JSON.parse(options.body));
       return response({ message_id: sent.length });
     }
@@ -54,7 +54,8 @@ test("pollOnce advances update offset", async () => {
     token: "test-token",
     chatId: "12345",
     fetchImpl: async (_url, options) => {
-      requested = JSON.parse(options.body);
+      const body = JSON.parse(options.body);
+      if (url.endsWith("/getUpdates")) requested = body;
       return response([{ update_id: 7, message: { text: "/help", chat: { id: 12345 } } }]);
     }
   });
