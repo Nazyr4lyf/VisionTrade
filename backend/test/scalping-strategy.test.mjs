@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { ScalpingStrategyEngine, detectZones } from "../src/strategy/scalping-strategy.mjs";
 
 const NOW = 1_800_000_000_000;
@@ -109,4 +111,41 @@ test("future-dated closed candles fail closed with NO_TRADE", () => {
   }));
   assert.equal(result.action, "NO_TRADE");
   assert.match(result.reasons[0], /future/);
+});
+
+
+test("shared Android/backend decision fixtures produce identical action and regime contracts", () => {
+  const fixturePath = new URL("../../app/src/test/resources/scalping/decision-cases.json", import.meta.url);
+  const cases = JSON.parse(readFileSync(fileURLToPath(fixturePath), "utf8"));
+  const nowMillis = 1_800_000_000_000;
+  const engine = new ScalpingStrategyEngine();
+
+  for (const item of cases) {
+    const makeRows = (count, timeframeMinutes, pattern) =>
+      Array.from({ length: count }, (_, index) => {
+        const close = pattern === "TREND"
+          ? 100 + index * 0.8
+          : 100 + Math.sin(index / (timeframeMinutes === 5 ? 3 : 2)) * (timeframeMinutes === 5 ? 2 : 0.8);
+        const open = close - 0.15;
+        const timestampMillis = item.futureCandles
+          ? nowMillis + (index + 1) * timeframeMinutes * 60_000
+          : nowMillis - (count - index) * timeframeMinutes * 60_000;
+        return {
+          timestampMillis, open, high: Math.max(open, close) + 0.5,
+          low: Math.min(open, close) - 0.5, close, volume: 100 + (index % 5),
+          turnover: close * (100 + (index % 5)), timeframeMinutes, isClosed: true
+        };
+      });
+    const result = engine.analyze({
+      symbol: "BTCUSDT",
+      marketType: item.marketType,
+      fiveMinuteCandles: makeRows(item.fiveCount, item.fiveTimeframeMinutes, item.fivePattern),
+      oneMinuteCandles: makeRows(item.oneCount, item.oneTimeframeMinutes, "RANGE"),
+      marketDataReceivedAtMillis: nowMillis + item.receivedAtOffsetMillis,
+      nowMillis
+    });
+    assert.equal(result.action, item.expectedAction, item.id);
+    assert.equal(result.regime, item.expectedRegime, item.id);
+    assert.match(result.reasons.join(" ").toLowerCase(), item.expectedReasonContains.toLowerCase(), item.id);
+  }
 });
