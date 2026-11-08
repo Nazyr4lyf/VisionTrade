@@ -43,3 +43,35 @@ test("rejects non-success Bybit response envelopes", async () => {
   });
   await assert.rejects(() => client.getTickers("spot"), /invalid parameter/);
 });
+
+test("supports bounded kline time windows for position history", async () => {
+  let requestedUrl;
+  const client = new BybitClient({
+    fetchImpl: async url => {
+      requestedUrl = new URL(url);
+      return response({ retCode: 0, result: { list: [] } });
+    },
+    baseUrl: "https://example.test"
+  });
+  await client.getKlines("spot", "BTCUSDT", "1", {
+    limit: 1000, start: 60_000, end: 120_000
+  });
+  assert.equal(requestedUrl.searchParams.get("start"), "60000");
+  assert.equal(requestedUrl.searchParams.get("end"), "120000");
+  assert.equal(requestedUrl.searchParams.get("limit"), "1000");
+});
+
+test("rejects invalid kline time windows", async () => {
+  const client = new BybitClient({
+    fetchImpl: async () => response({ retCode: 0, result: { list: [] } }),
+    baseUrl: "https://example.test"
+  });
+  await assert.rejects(
+    () => client.getKlines("spot", "BTCUSDT", "1", { start: -1 }),
+    /Invalid kline start timestamp/
+  );
+  await assert.rejects(
+    () => client.getKlines("spot", "BTCUSDT", "1", { start: 120_000, end: 60_000 }),
+    /Kline end must be after start/
+  );
+});
