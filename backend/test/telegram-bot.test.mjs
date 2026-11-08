@@ -53,7 +53,7 @@ test("pollOnce advances update offset", async () => {
   const bot = new TelegramBot({
     token: "test-token",
     chatId: "12345",
-    fetchImpl: async (_url, options) => {
+    fetchImpl: async (url, options) => {
       const body = JSON.parse(options.body);
       if (url.endsWith("/getUpdates")) requested = body;
       return response([{ update_id: 7, message: { text: "/help", chat: { id: 12345 } } }]);
@@ -62,4 +62,26 @@ test("pollOnce advances update offset", async () => {
   await bot.pollOnce(() => ({ running: true, mode: "MARKET_DATA_ONLY" }));
   assert.equal(requested.offset, 0);
   assert.equal(bot.offset, 8);
+});
+
+test("configured chat can request recent strategy signals", async () => {
+  const sent = [];
+  const bot = new TelegramBot({
+    token: "test-token",
+    chatId: "12345",
+    fetchImpl: async (_url, options) => {
+      sent.push(JSON.parse(options.body));
+      return response({ message_id: sent.length });
+    }
+  });
+  await bot.handleUpdate({ message: { text: "/signals", chat: { id: 12345 } } }, () => ({
+    recentSignals: [{
+      symbol: "BTCUSDT", marketType: "SPOT", action: "BUY",
+      referencePrice: 65000, riskAccepted: true, grossRiskReward: 2.4
+    }]
+  }));
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /BTCUSDT SPOT LONG/);
+  assert.match(sent[0].text, /2.40R/);
+  assert.match(sent[0].text, /no exchange orders/i);
 });
