@@ -11,7 +11,7 @@ export function formatStrategyAlert(signal, riskLevels = null, paperApproval = n
         `Candidate stop-loss: ${riskLevels.stopLossPrice}`,
         `Candidate take-profit: ${riskLevels.takeProfitPrice}`,
         `Gross risk/reward: ${Number(riskLevels.grossRiskReward).toFixed(2)}R`,
-        "Account risk sizing: pending equity and verified fee/slippage settings."
+        "Gross R only; net 1% risk approval is reported separately below."
       ]
     : [`Stop/target validation: REJECTED — ${riskLevels?.rejectionReason ?? "not calculated"}`];
   return [
