@@ -16,8 +16,7 @@ class MemoryPaperTradeStore {
     const active = [...this.trades.values()].find(item =>
       item.status === "OPEN" &&
       item.symbol === trade.symbol &&
-      item.marketType === trade.marketType &&
-      item.side === trade.side
+      item.marketType === trade.marketType
     );
     if (active) return { created: false, reason: "OPEN_POSITION_EXISTS", trade: active };
     this.trades.set(trade.id, structuredClone(trade));
@@ -136,6 +135,25 @@ test("ledger rejects a candidate below 2R or above its approved risk budget", as
     }),
     /exceeds the approved risk budget/
   );
+});
+
+
+test("opposite-side signal cannot open a second simultaneous position on the same instrument", async () => {
+  const ledger = new PaperTradeLedger({ store: new MemoryPaperTradeStore() });
+  await ledger.openApprovedTrade({
+    approval: approved({ marketType: "USDT_PERPETUAL" }),
+    idempotencyKey: "long-perp",
+    tradeId: "long-perp",
+    openedAt: 1000
+  });
+  const opposite = await ledger.openApprovedTrade({
+    approval: approved({ marketType: "USDT_PERPETUAL", side: "SHORT" }),
+    idempotencyKey: "short-perp",
+    tradeId: "short-perp",
+    openedAt: 1001
+  });
+  assert.equal(opposite.created, false);
+  assert.equal(opposite.reason, "OPEN_POSITION_EXISTS");
 });
 
 test("spot short candidate is rejected before reaching the store", async () => {
