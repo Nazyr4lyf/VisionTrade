@@ -192,3 +192,21 @@ No performance target or profitability claim is assumed in advance.
 - Signals are deduplicated, explainable, timestamped and expire correctly.
 - Paper trades are reproducible from stored signal and market-data snapshots.
 - Android can display scanner status, signals, paper positions and performance without owning the continuous scanner process.
+
+
+## Cross-platform strategy parity gate
+
+The Android Kotlin domain engine and the Node.js backend strategy engine are separate implementations and must not silently drift.
+
+The first parity gate is a deterministic 80-candle indicator contract shared by the Android and backend unit-test suites. Both suites assert the same EMA20, EMA50, RSI7, ATR14, ADX14, VWAP, volume SMA20 and relative-volume outputs within a 1e-8 tolerance. The fixture uses closed one-minute candles with deterministic OHLCV values.
+
+Parity requirements before signal generation is enabled:
+
+1. Indicator formulas and warm-up periods must match.
+2. Only closed candles may affect calculations.
+3. Duplicate timestamps and mixed timeframes must fail closed.
+4. Confirmed swing pivots must use the same left/right confirmation windows and tolerance clustering.
+5. Strategy decisions must agree for the same 5m/1m market-data fixtures, including stale data, strong trends, incomplete history, Spot short rejection and conflicting confirmations.
+6. Risk sizing and net reward-to-risk remain a separate mandatory gate; an indicator or strategy BUY/SELL is not an executable trade instruction.
+
+Golden-value tests are a baseline, not a substitute for shared end-to-end signal fixtures. Do not enable backend signal publication or paper execution until the decision-level parity suite and the risk-engine tests both pass.
