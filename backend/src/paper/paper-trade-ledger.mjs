@@ -11,8 +11,9 @@ export class PaperTradeLedger {
     if (!store ||
         typeof store.createOpenTrade !== "function" ||
         typeof store.findById !== "function" ||
+        typeof store.listOpenTrades !== "function" ||
         typeof store.closeIfOpen !== "function") {
-      throw new Error("A persistent trade store with atomic create/close methods is required.");
+      throw new Error("A persistent trade store with atomic create/list/close methods is required.");
     }
     this.store = store;
   }
@@ -79,6 +80,14 @@ export class PaperTradeLedger {
 
     // Store operation must enforce idempotency and active-instrument uniqueness atomically.
     return this.store.createOpenTrade(trade);
+  }
+
+  async listOpenTrades() {
+    const trades = await this.store.listOpenTrades();
+    if (!Array.isArray(trades)) {
+      throw new Error("Persistent trade store returned an invalid open-trade list.");
+    }
+    return trades.filter(trade => trade?.status === "OPEN");
   }
 
   async closeTrade({ tradeId, exit, closedAt }) {
