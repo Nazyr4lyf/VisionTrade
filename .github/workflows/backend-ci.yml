@@ -6,10 +6,14 @@ on:
       - feature/crypto-scalping-foundation
     paths:
       - "backend/**"
+      - "Dockerfile"
+      - "render.yaml"
       - ".github/workflows/backend-ci.yml"
   pull_request:
     paths:
       - "backend/**"
+      - "Dockerfile"
+      - "render.yaml"
       - ".github/workflows/backend-ci.yml"
 
 permissions:
@@ -26,3 +30,5 @@ jobs:
       - name: Run backend tests
         working-directory: backend
         run: npm test
+      - name: Build Render worker image
+        run: docker build --tag visiontrade-worker:test .
