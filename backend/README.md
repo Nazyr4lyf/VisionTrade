@@ -8,7 +8,7 @@ This Node.js 20+ worker is a backend-side market-data ingestion foundation for t
 - Spot and USDT perpetual instrument discovery.
 - Only closed 1-minute and 5-minute candles are marked eligible for strategy input.
 - No exchange API keys, private endpoints, order placement, or live trading.
-- By default the worker logs market-data ingestion health only. An explicitly enabled, separate paper-position monitor can simulate exits for existing Spot paper positions; it never opens positions or emits trade-entry signals.
+- The worker continuously scans eligible USDT Spot and USDT perpetual markets with the 5m range-regime filter and 1m entry confirmation. It evaluates closed candles only. It can send deduplicated BUY/SELL strategy-signal alerts to the configured Telegram chat. These are strategy signals only, not paper-trade approvals; no exchange order is placed. An explicitly enabled, separate paper-position monitor can simulate exits for existing Spot paper positions; it never opens positions.
 - An isolated backend `CryptoRiskEngine` and `PaperTradeApprovalEngine` validate candidate sizing, exchange tick/step/minimums, Spot short restrictions, estimated fees/slippage/funding, the 1% equity risk budget, and the 2R net floor. They are not wired into the worker.
 - The paper-trade lifecycle coordinator and server-only Supabase PostgREST adapter are implemented.
 - The VisionTrade paper-trade schema has been deployed to the dedicated Supabase project below; the pre-existing HMS and other account projects were not modified.
@@ -46,7 +46,7 @@ The worker can connect to the Telegram Bot API using long polling. It is enabled
 - Commands are accepted only from the configured `TELEGRAM_CHAT_ID`; messages are sent only to that chat.
 - A startup notification confirms the worker connection.
 - Telegram is a notification/control interface only. It does not place exchange orders.
-- The worker still runs in `MARKET_DATA_ONLY` mode. Strategy signal generation is not yet connected to this worker, so no strategy alerts are claimed or sent.
+- The worker runs in `LIVE_MARKET_MONITORING` mode. It evaluates the backend `ScalpingStrategyEngine` against each scanned market pair and sends only actionable BUY/SELL alerts. Repeated alerts for the same action on the same closed 1m candle are suppressed; failed Telegram deliveries remain eligible for retry on the next scan. `/status` includes the latest scan and actionable signal count.
 
 Set these values in the backend host's private environment/secret settings. Never commit a bot token or put it in source code, workflow YAML, screenshots, or chat messages. If a token is exposed, revoke it with BotFather and replace it.
 
@@ -97,8 +97,8 @@ No service-role key has been added to this repository or to a client app.
 2. Validate the opt-in Spot position monitor against paper fixtures and a controlled end-to-end test before setting `PAPER_POSITION_MONITORING_ENABLED=true`.
 3. Implement historical funding-fee accounting before enabling USDT perpetual position monitoring; perpetuals are currently skipped safely.
 4. Complete Kotlin/Node numeric parity for indicators, S/R zones, strategy decisions, and risk sizing.
-5. Define and test non-repainting stop-loss/take-profit generation; only then connect the isolated risk gate to candidate signals.
-6. Add authenticated app-to-backend APIs and notification delivery.
+5. Wire the isolated stop/target and 1% net-risk gate into strategy candidates, using explicitly configured paper-account equity and verified fee/slippage assumptions, before marking any signal as paper-trade approved.
+6. Add authenticated app-to-backend APIs and Android notification delivery.
 7. Deploy the worker to an always-on container/service and run paper-only end-to-end tests.
 
-The worker intentionally remains `MARKET_DATA_ONLY`: provider errors are logged and no trade action is attempted. Live trading is not implemented.
+The worker runs `LIVE_MARKET_MONITORING`: it evaluates strategy signals and can send Telegram alerts. The isolated `PaperTradeApprovalEngine` / risk gate is still not wired into signal alerts, so alerts are not approved paper-trade candidates and do not contain risk-sized quantities or validated stop/target levels. No paper entry is automatically created. Live trading and exchange order placement are not implemented.
