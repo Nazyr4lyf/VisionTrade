@@ -9,6 +9,7 @@ This Node.js 20+ worker is a backend-side market-data ingestion foundation for t
 - Only closed 1-minute and 5-minute candles are marked eligible for strategy input.
 - No exchange API keys, private endpoints, order placement, or live trading.
 - The worker currently logs ingestion health only. It does **not** emit trading signals or write paper trades yet.
+- An isolated backend `CryptoRiskEngine` now validates candidate sizing, exchange tick/step/minimums, Spot short restrictions, estimated fees/slippage/funding, the 1% equity risk budget, and the 2R net floor. It is not wired into the worker because the strategy does not yet produce validated stop-loss/take-profit levels.
 
 ## Run
 
@@ -27,10 +28,11 @@ Optional environment variables:
 
 ## Next integration gates
 
-1. Add backend parity tests for the Kotlin indicator, S/R, strategy, and net-RR engines before enabling signal decisions.
-2. Add durable Supabase migrations, RLS, and idempotent paper-ledger writes after a dedicated VisionTrade project is selected.
-3. Add authenticated app-to-backend APIs and notification delivery.
-4. Deploy the worker to an always-on container/service. A normal serverless request function is not a substitute for a continuously running scanner.
-5. Run paper-only end-to-end tests and verify separate Spot and Perpetual reporting.
+1. Complete Kotlin/Node numeric parity for indicators, S/R zones, strategy decisions, and risk sizing.
+2. Define and test non-repainting stop-loss/take-profit generation; only then connect the isolated risk gate to candidate signals.
+3. Add a backend paper-position simulator and idempotent ledger, including gap-through-stop handling and separate Spot/Perpetual accounting.
+4. Add durable Supabase migrations and RLS after a dedicated VisionTrade project is selected.
+5. Add authenticated app-to-backend APIs and notification delivery.
+6. Deploy the worker to an always-on container/service and run paper-only end-to-end tests.
 
 The worker intentionally fails closed: provider errors are logged and no trade action is attempted.
