@@ -25,7 +25,7 @@ export class SignalAlertDeduplicator {
 
   fingerprint(signal) {
     if (!signal || !["BUY", "SELL"].includes(signal.action)) return null;
-    const candleTime = Number(signal.evaluatedAtMillis);
+    const candleTime = Number(signal.signalCandleTimestampMillis ?? signal.evaluatedAtMillis);
     if (!Number.isSafeInteger(candleTime) || candleTime <= 0) return null;
     return { key: `${signal.marketType}:${signal.symbol}`, value: `${signal.action}:${candleTime}` };
   }
