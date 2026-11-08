@@ -23,9 +23,10 @@ test("rejects NO_TRADE and invalid prices", () => {
 
 test("deduplicates the same symbol, market, action and evaluated candle", () => {
   const dedupe = new SignalAlertDeduplicator();
-  assert.equal(dedupe.shouldSend(signal), true);
-  assert.equal(dedupe.shouldSend(signal), false);
-  assert.equal(dedupe.shouldSend({ ...signal, evaluatedAtMillis: signal.evaluatedAtMillis + 60_000 }), true);
-  assert.equal(dedupe.shouldSend({ ...signal, marketType: "USDT_PERPETUAL" }), true);
-  assert.equal(dedupe.shouldSend({ ...signal, action: "NO_TRADE" }), false);
+  assert.equal(dedupe.hasSent(signal), false);
+  dedupe.markSent(signal);
+  assert.equal(dedupe.hasSent(signal), true);
+  assert.equal(dedupe.hasSent({ ...signal, evaluatedAtMillis: signal.evaluatedAtMillis + 60_000 }), false);
+  assert.equal(dedupe.hasSent({ ...signal, marketType: "USDT_PERPETUAL" }), false);
+  assert.equal(dedupe.hasSent({ ...signal, action: "NO_TRADE" }), false);
 });
