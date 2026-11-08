@@ -92,6 +92,14 @@ export class SupabasePaperTradeStore {
     return mapTrade(await this.rpc("get_paper_trade_by_id", { p_trade_id: id }));
   }
 
+  async listOpenTrades() {
+    const rows = await this.rpc("list_open_paper_trades", {});
+    if (!Array.isArray(rows)) {
+      throw new Error("Supabase returned an invalid open paper-trade list.");
+    }
+    return rows.map(mapTrade);
+  }
+
   async closeIfOpen(id, closure) {
     const result = await this.rpc("close_paper_trade", {
       p_trade_id: id,
