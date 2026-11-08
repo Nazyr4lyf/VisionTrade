@@ -29,6 +29,12 @@ class MemoryPaperTradeStore {
     return trade ? structuredClone(trade) : null;
   }
 
+  async listOpenTrades() {
+    return [...this.trades.values()]
+      .filter(trade => trade.status === "OPEN")
+      .map(trade => structuredClone(trade));
+  }
+
   async closeIfOpen(id, closure) {
     const trade = this.trades.get(id);
     if (!trade) return { closed: false, reason: "TRADE_NOT_FOUND", trade: null };
@@ -227,4 +233,31 @@ test("ledger preserves high-precision decimal strings for PostgreSQL NUMERIC", a
   assert.equal(result.trade.entryPrice, "67234.123456789123");
   assert.equal(result.trade.stopLossPrice, "67000.000000000001");
   assert.equal(result.trade.takeProfitPrice, "68000.000000000009");
+});
+
+test("ledger lists only durable OPEN trades", async () => {
+  const store = new MemoryPaperTradeStore();
+  const ledger = new PaperTradeLedger({ store });
+  await ledger.openApprovedTrade({
+    approval: approved(),
+    idempotencyKey: "open-list",
+    tradeId: "open-list",
+    openedAt: 1000
+  });
+  await ledger.openApprovedTrade({
+    approval: approved({ symbol: "ETHUSDT" }),
+    idempotencyKey: "closed-list",
+    tradeId: "closed-list",
+    openedAt: 1001
+  });
+  await ledger.closeTrade({
+    tradeId: "closed-list",
+    exit: { reason: "TAKE_PROFIT", fillPrice: 104, netPnl: 0.3, realizedR: 0.3 },
+    closedAt: 2000
+  });
+
+  const open = await ledger.listOpenTrades();
+  assert.equal(open.length, 1);
+  assert.equal(open[0].id, "open-list");
+  assert.equal(open[0].status, "OPEN");
 });
