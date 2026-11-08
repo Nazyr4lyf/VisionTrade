@@ -136,12 +136,14 @@ async function scanCycle() {
         referencePrice: signal.referencePrice, evaluatedAtMillis: signal.signalCandleTimestampMillis,
         riskAccepted: riskLevels.accepted,
         grossRiskReward: riskLevels.grossRiskReward,
+        stopLossPrice: riskLevels.stopLossPrice,
+        takeProfitPrice: riskLevels.takeProfitPrice,
         riskReason: riskLevels.rejectionReason
       });
       recentSignals = recentSignals.slice(0, 10);
     }
     let alertSent = false;
-    if (notifier && !alertDeduplicator.hasSent(signal)) {
+    if (notifier && ["BUY", "SELL"].includes(signal.action) && !alertDeduplicator.hasSent(signal)) {
       try {
         await notifier.sendMessage(formatStrategyAlert(signal, riskLevels));
         alertDeduplicator.markSent(signal);
