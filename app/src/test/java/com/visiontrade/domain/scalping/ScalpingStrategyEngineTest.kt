@@ -5,6 +5,7 @@ import java.math.BigDecimal
 import kotlin.math.sin
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ScalpingStrategyEngineTest {
 
@@ -90,12 +91,10 @@ class ScalpingStrategyEngineTest {
         timeframe = timeframe,
         isClosed = true
     )
-}
-
 
     @Test
     fun sharedAndroidBackendDecisionFixturesProduceExpectedActionAndRegime() {
-        val stream = javaClass.classLoader?.getResourceAsStream("scalping/decision-cases.json")
+        val stream = this::class.java.classLoader?.getResourceAsStream("scalping/decision-cases.json")
             ?: error("Shared strategy decision fixtures were not found on the test classpath.")
         val fixtures = stream.bufferedReader().use { JsonParser.parseReader(it).asJsonArray }
         val now = 1_800_000_000_000L
@@ -159,3 +158,4 @@ class ScalpingStrategyEngineTest {
             )
         }
     }
+}
