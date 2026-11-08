@@ -152,6 +152,8 @@ class ScalpingStrategyEngineTest {
 
             assertEquals(item.get("expectedAction").asString, result.action.name, id)
             assertEquals(item.get("expectedRegime").asString, result.regime.name, id)
+            val expectedReferencePrice = 100.0 + sin((oneCount - 1) / 2.0) * 0.8
+            assertEquals(BigDecimal(expectedReferencePrice.toString()).stripTrailingZeros(), result.referencePrice?.stripTrailingZeros(), id)
             assertTrue(
                 result.reasons.joinToString(" ").contains(item.get("expectedReasonContains").asString, ignoreCase = true),
                 id
