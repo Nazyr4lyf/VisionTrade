@@ -9,8 +9,8 @@ const tradeRow = {
   symbol: "BTCUSDT",
   market_type: "SPOT",
   side: "LONG",
-  quantity: "0.1",
-  entry_price: "100",
+  quantity: "0.100000000000000019",
+  entry_price: "100.000000000000000123",
   stop_loss_price: "98",
   take_profit_price: "104",
   risk_budget: "1",
@@ -37,7 +37,7 @@ test("requires server URL and service-role key", () => {
   assert.throws(() => new SupabasePaperTradeStore({ url: "http://example.supabase.co", serviceRoleKey: "secret" }), /HTTPS/);
 });
 
-test("createOpenTrade calls atomic RPC and maps persisted row", async () => {
+test("createOpenTrade calls atomic RPC and preserves PostgreSQL NUMERIC precision", async () => {
   let request;
   const store = new SupabasePaperTradeStore({
     url: "https://visiontrade.supabase.co/",
@@ -70,7 +70,8 @@ test("createOpenTrade calls atomic RPC and maps persisted row", async () => {
   assert.equal(JSON.parse(request.options.body).p_trade.symbol, "BTCUSDT");
   assert.equal(result.created, true);
   assert.equal(result.trade.idempotencyKey, "signal-1");
-  assert.equal(result.trade.quantity, 0.1);
+  assert.equal(result.trade.quantity, "0.100000000000000019");
+  assert.equal(result.trade.entryPrice, "100.000000000000000123");
   assert.equal(result.trade.openedAt, Date.parse(tradeRow.opened_at));
 });
 
@@ -83,15 +84,15 @@ test("findById maps missing trade to null", async () => {
   assert.equal(await store.findById("missing"), null);
 });
 
-test("closeIfOpen calls atomic close RPC and maps exit", async () => {
+test("closeIfOpen calls atomic close RPC and preserves decimal exit values", async () => {
   const closed = {
     ...tradeRow,
     status: "CLOSED",
     closed_at: "2026-11-08T10:01:00.000Z",
     exit_reason: "STOP_LOSS",
-    exit_fill_price: "97.5",
-    exit_net_pnl: "-0.35",
-    exit_realized_r: "-0.35"
+    exit_fill_price: "97.500000000000000123",
+    exit_net_pnl: "-0.350000000000000019",
+    exit_realized_r: "-0.35000000"
   };
   let body;
   const store = new SupabasePaperTradeStore({
@@ -110,8 +111,8 @@ test("closeIfOpen calls atomic close RPC and maps exit", async () => {
   assert.equal(body.p_trade_id, "trade-1");
   assert.equal(body.p_closure.exit.reason, "STOP_LOSS");
   assert.equal(result.closed, true);
-  assert.equal(result.trade.exit.fillPrice, 97.5);
-  assert.equal(result.trade.exit.netPnl, -0.35);
+  assert.equal(result.trade.exit.fillPrice, "97.500000000000000123");
+  assert.equal(result.trade.exit.netPnl, "-0.350000000000000019");
 });
 
 test("does not leak credentials and surfaces safe HTTP errors", async () => {
