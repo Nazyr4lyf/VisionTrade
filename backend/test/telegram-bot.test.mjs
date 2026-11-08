@@ -77,11 +77,14 @@ test("configured chat can request recent strategy signals", async () => {
   await bot.handleUpdate({ message: { text: "/signals", chat: { id: 12345 } } }, () => ({
     recentSignals: [{
       symbol: "BTCUSDT", marketType: "SPOT", action: "BUY",
-      referencePrice: 65000, riskAccepted: true, grossRiskReward: 2.4
+      referencePrice: 65000, riskAccepted: true, grossRiskReward: 2.4,
+      stopLossPrice: 64700, takeProfitPrice: 65700
     }]
   }));
   assert.equal(sent.length, 1);
   assert.match(sent[0].text, /BTCUSDT SPOT LONG/);
   assert.match(sent[0].text, /2.40R/);
+  assert.match(sent[0].text, /SL 64700/);
+  assert.match(sent[0].text, /TP 65700/);
   assert.match(sent[0].text, /no exchange orders/i);
 });
