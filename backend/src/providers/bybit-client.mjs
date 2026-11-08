@@ -95,15 +95,20 @@ export class BybitClient {
       }));
   }
 
-  async getKlines(category, symbol, interval, { limit = 200 } = {}) {
+  async getKlines(category, symbol, interval, { limit = 200, start, end } = {}) {
     if (!["spot", "linear"].includes(category)) throw new Error("Unsupported market category");
     if (!/^[A-Z0-9]{3,30}USDT$/.test(symbol)) throw new Error("Only USDT-quoted symbols are supported");
     if (!["1", "5"].includes(String(interval))) throw new Error("Only 1m and 5m candles are supported");
     if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error("Invalid kline limit");
+    if (start !== undefined && (!Number.isSafeInteger(start) || start < 0)) throw new Error("Invalid kline start timestamp");
+    if (end !== undefined && (!Number.isSafeInteger(end) || end < 0)) throw new Error("Invalid kline end timestamp");
+    if (start !== undefined && end !== undefined && end <= start) throw new Error("Kline end must be after start");
 
     const params = new URLSearchParams({
       category, symbol, interval: String(interval), limit: String(limit)
     });
+    if (start !== undefined) params.set("start", String(start));
+    if (end !== undefined) params.set("end", String(end));
     const payload = await fetchJson(
       `${this.baseUrl}/v5/market/kline?${params}`,
       { fetchImpl: this.fetchImpl }
