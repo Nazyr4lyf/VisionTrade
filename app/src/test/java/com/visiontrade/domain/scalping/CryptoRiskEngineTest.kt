@@ -36,8 +36,8 @@ class CryptoRiskEngineTest {
         assertTrue(result.estimatedLossAtStop <= result.riskBudget)
         assertTrue(result.netRiskReward!! >= BigDecimal("2.0"))
         assertEquals(
-            BigDecimal.ZERO,
-            result.quantity.remainder(BigDecimal("0.01"))
+            0,
+            result.quantity.remainder(BigDecimal("0.01")).compareTo(BigDecimal.ZERO)
         )
     }
 
