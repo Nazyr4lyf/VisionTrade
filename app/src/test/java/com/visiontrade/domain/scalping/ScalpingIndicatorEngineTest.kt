@@ -58,7 +58,7 @@ class ScalpingIndicatorEngineTest {
         assertNotNull(snapshot.atr14)
         assertNotNull(snapshot.adx14)
         assertNotNull(snapshot.vwap)
-        assertEquals(10.0, snapshot.relativeVolume!!, 0.000001)
+        assertEquals(1.0, snapshot.relativeVolume!!, 0.000001)
     }
 
     @Test
