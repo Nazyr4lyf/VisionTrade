@@ -75,6 +75,9 @@ export class OpenPositionMonitor {
     // If the trade opened exactly on a minute boundary, that candle is fully
     // post-entry; otherwise begin with the next minute to avoid pre-entry OHLC.
     const expectedFirstCandle = Math.ceil(trade.openedAt / MINUTE_MS) * MINUTE_MS;
+    if (expectedFirstCandle >= nowMillis) {
+      return { tradeId: trade.id, status: "SKIPPED", reason: "NO_POST_ENTRY_CLOSED_CANDLE_YET" };
+    }
     let rawCandles;
     try {
       rawCandles = await this.bybit.getKlines(category, trade.symbol, "1", {
