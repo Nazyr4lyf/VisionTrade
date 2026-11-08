@@ -35,6 +35,21 @@ npm test
 npm start
 ```
 
+
+## Render background-worker deployment
+
+The repository includes a root `Dockerfile` and `render.yaml` Blueprint for a dedicated, always-on Render Background Worker.
+
+1. In Render, choose **New → Blueprint** and connect this repository.
+2. Select branch `feature/crypto-scalping-foundation` for the review deployment; do not merge this branch into `main`.
+3. Review the proposed service before creating it. The Blueprint uses the Dockerfile at the repository root, disables automatic deploys, and sets `PAPER_POSITION_MONITORING_ENABLED=false`.
+4. The worker runs as the non-root `node` user. The Docker image build runs `npm test`; a failed test prevents a successful image build.
+5. Do not add exchange API credentials. Live trading and exchange order placement are not part of this worker.
+6. Do not add the Supabase service-role key yet. With monitoring disabled, the worker needs only public market-data access. Add the Supabase URL and service-role key to Render's private environment settings only after the read-only database check and a separate monitoring safety review.
+7. Keep `PAPER_POSITION_MONITORING_ENABLED=false` for the first deployment. Do not enable Spot monitoring or paper trade entry until the controlled end-to-end validation is complete.
+
+A Render Background Worker is a continuously running service and may incur hosting charges. Review the selected instance plan and its price in Render before confirming service creation. No Render service is created by committing these deployment files.
+
 ## Read-only Supabase connectivity check
 
 After setting `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the backend host's secret manager, run:
