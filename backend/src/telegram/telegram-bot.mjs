@@ -29,17 +29,17 @@ export class TelegramBot {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await this.fetchImpl(`${API_BASE}/bot${this.token}/${method}`, {
+      const response = await this.fetchImpl(API_BASE + "/bot" + this.token + "/" + method, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
         signal: controller.signal
       });
       const body = await response.json();
-      if (!response.ok || body.ok !== true) throw new Error(`Telegram API request failed (${method})`);
+      if (!response.ok || body.ok !== true) throw new Error("Telegram API request failed (" + method + ")");
       return body.result;
     } catch (error) {
-      if (error.name === "AbortError") throw new Error(`Telegram API request timed out (${method})`);
+      if (error.name === "AbortError") throw new Error("Telegram API request timed out (" + method + ")");
       throw error;
     } finally {
       clearTimeout(timer);
@@ -61,28 +61,29 @@ export class TelegramBot {
     const command = message.text.trim().split(/\s+/, 1)[0].split("@")[0].toLowerCase();
     if (command === "/start" || command === "/help") {
       await this.sendMessage(
-        "NAXYUS VISIONTRADE\nBot connection is active.\n\nCommands:\n/status - worker and monitoring status\n/help - show commands"
+        "NAXYUS VISIONTRADE\nBot connection is active.\n\nCommands:\n/status - worker and monitoring status\n/signals - latest strategy signals\n/help - show commands"
       );
     } else if (command === "/signals") {
       const signals = getStatus().recentSignals ?? [];
-      const text = signals.length
+      const lines = signals.length
         ? signals.map(item => {
             const side = item.action === "BUY" ? "LONG" : "SHORT";
             const rr = item.riskAccepted && Number.isFinite(item.grossRiskReward)
-              ? ` | gross RR ${item.grossRiskReward.toFixed(2)}R` : " | stop/target rejected";
-            return `${item.symbol} ${item.marketType} ${side} @ ${item.referencePrice}${rr}`;
-          }).join("\\n")
+              ? " | gross RR " + item.grossRiskReward.toFixed(2) + "R"
+              : " | stop/target rejected";
+            return item.symbol + " " + item.marketType + " " + side + " @ " + item.referencePrice + rr;
+          }).join("\n")
         : "No actionable strategy signals in the latest scans.";
-      await this.sendMessage("LATEST VISIONTRADE SIGNALS\\n" + text + "\\n\\nSignal only — no exchange orders.");
+      await this.sendMessage("LATEST VISIONTRADE SIGNALS\n" + lines + "\n\nSignal only — no exchange orders.");
     } else if (command === "/status") {
       const status = getStatus();
       await this.sendMessage(
         "VISIONTRADE STATUS\n" +
-        `Worker: ${status.running ? "RUNNING" : "STOPPED"}\n` +
-        `Mode: ${status.mode}\n` +
-        `Last scan: ${status.lastScanAt ?? "not yet completed"}\n` +
-        `Market pairs scanned: ${status.lastScanPairs ?? 0}\n` +
-        `Actionable signals: ${status.actionableSignals ?? 0}\n` +
+        "Worker: " + (status.running ? "RUNNING" : "STOPPED") + "\n" +
+        "Mode: " + status.mode + "\n" +
+        "Last scan: " + (status.lastScanAt ?? "not yet completed") + "\n" +
+        "Market pairs scanned: " + (status.lastScanPairs ?? 0) + "\n" +
+        "Actionable signals: " + (status.actionableSignals ?? 0) + "\n" +
         "Live orders: DISABLED"
       );
     }
@@ -115,6 +116,5 @@ export class TelegramBot {
 }
 
 export function telegramConfigFromEnv(env = process.env) {
-  const enabled = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
-  return { enabled };
+  return { enabled: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) };
 }
