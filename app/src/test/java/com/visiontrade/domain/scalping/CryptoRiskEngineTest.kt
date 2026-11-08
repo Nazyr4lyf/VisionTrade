@@ -93,6 +93,23 @@ class CryptoRiskEngineTest {
         assertFalse(result.accepted)
     }
 
+    @Test
+    fun rejectsPricesThatDoNotAlignWithExchangeTickSize() {
+        val result = engine.calculate(
+            RiskCalculationRequest(
+                equity = BigDecimal("1000"),
+                entryPrice = BigDecimal("100.005"),
+                stopLossPrice = BigDecimal("99.00"),
+                takeProfitPrice = BigDecimal("103.00"),
+                side = PositionSide.LONG,
+                instrument = spotInstrument(),
+                costs = costs
+            )
+        )
+        assertFalse(result.accepted)
+        assertTrue(result.rejectionReason!!.contains("tick size"))
+    }
+
     private fun spotInstrument() = ExchangeInstrument(
         symbol = "BTCUSDT",
         marketType = CryptoMarketType.SPOT,
