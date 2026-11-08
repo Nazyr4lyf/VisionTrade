@@ -93,6 +93,36 @@ class ScalpingIndicatorEngineTest {
         assertTrue(value in 0.0..100.0)
     }
 
+    @Test
+    fun indicatorOutputsMatchBackendGoldenParityContract() {
+        val candles = (0 until 80).map { index ->
+            val close = 100.0 + kotlin.math.sin(index / 3.0) * 2.0 + index * 0.01
+            val open = close + if (index % 2 == 0) 0.2 else -0.2
+            val high = maxOf(open, close) + 0.8
+            val low = minOf(open, close) - 0.7
+            CryptoCandle(
+                timestampMillis = 1_800_000_000_000L + index * 60_000L,
+                open = BigDecimal(open.toString()),
+                high = BigDecimal(high.toString()),
+                low = BigDecimal(low.toString()),
+                close = BigDecimal(close.toString()),
+                volume = BigDecimal((100 + (index % 7) * 5).toString()),
+                turnover = BigDecimal(close.toString()) * BigDecimal((100 + (index % 7) * 5).toString()),
+                timeframe = MarketTimeframe.ONE_MINUTE,
+                isClosed = true
+            )
+        }
+        val result = engine.calculate(candles)
+        assertEquals(100.74551780975858, result.ema20!!, 1e-8)
+        assertEquals(100.5416950330074, result.ema50!!, 1e-8)
+        assertEquals(80.92377481582348, result.rsi7!!, 1e-8)
+        assertEquals(1.7000000000000028, result.atr14!!, 1e-8)
+        assertEquals(20.897143294772288, result.adx14!!, 1e-8)
+        assertEquals(100.48630454185279, result.vwap!!, 1e-8)
+        assertEquals(115.0, result.volumeSma20!!, 1e-8)
+        assertEquals(0.9544468546637744, result.relativeVolume!!, 1e-8)
+    }
+
     private fun candle(
         timestamp: Long,
         open: Number,
