@@ -52,6 +52,7 @@ const approved = (overrides = {}) => ({
     takeProfitPrice: 104,
     quantity: 0.1,
     riskBudget: 1,
+    estimatedLossAtStop: 0.9,
     netRiskReward: 2.1,
     ...overrides
   }
@@ -112,6 +113,29 @@ test("one active position per instrument and side is enforced by the store", asy
   });
   assert.equal(duplicate.created, false);
   assert.equal(duplicate.reason, "OPEN_POSITION_EXISTS");
+});
+
+
+test("ledger rejects a candidate below 2R or above its approved risk budget", async () => {
+  const ledger = new PaperTradeLedger({ store: new MemoryPaperTradeStore() });
+  await assert.rejects(
+    ledger.openApprovedTrade({
+      approval: approved({ netRiskReward: 1.99 }),
+      idempotencyKey: "low-rr",
+      tradeId: "low-rr",
+      openedAt: 1000
+    }),
+    /at least 2.0 net R/
+  );
+  await assert.rejects(
+    ledger.openApprovedTrade({
+      approval: approved({ estimatedLossAtStop: 1.01 }),
+      idempotencyKey: "over-budget",
+      tradeId: "over-budget",
+      openedAt: 1000
+    }),
+    /exceeds the approved risk budget/
+  );
 });
 
 test("spot short candidate is rejected before reaching the store", async () => {
