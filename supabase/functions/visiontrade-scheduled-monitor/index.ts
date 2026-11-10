@@ -178,7 +178,8 @@ Deno.serve(async (req) => {
     });
     const results = settled.filter(x => x?.status === "fulfilled").map(x => x.value);
     const failures = settled.length - results.length;
-    const actionable = results.filter(x => ["BUY", "SELL"].includes(x.signal.action));
+    const candidates = results.filter(x => ["BUY", "SELL"].includes(x.signal.action));
+    const actionable = candidates.filter(x => x.levels?.accepted === true);
     const rejectionReasons = {};
     for (const result of results) {
       if (result.signal.action === "NO_TRADE") {
@@ -189,7 +190,7 @@ Deno.serve(async (req) => {
     if (failures) rejectionReasons["SCAN_ERROR"] = failures;
 
     const now = new Date().toISOString();
-    for (const {signal,levels} of actionable) {
+    for (const {signal,levels} of candidates) {
       const candleAt = new Date(signal.signalCandleTimestampMillis).toISOString();
       const payload = {
         symbol: signal.symbol, marketType: signal.marketType, action: signal.action,
