@@ -47,6 +47,7 @@ private data class MonitorSignal(
     val stopLoss: String,
     val takeProfit: String,
     val riskAccepted: Boolean,
+    val riskReason: String,
     val telegramStatus: String,
     val telegramAttempts: Int,
     val candleAt: String,
@@ -123,6 +124,7 @@ private fun parseDashboard(root: JsonObject): MonitorDashboard {
             stopLoss = payload.get("stopLossPrice")?.takeUnless(JsonElement::isJsonNull)?.toString() ?: "—",
             takeProfit = payload.get("takeProfitPrice")?.takeUnless(JsonElement::isJsonNull)?.toString() ?: "—",
             riskAccepted = payload.bool("riskAccepted"),
+            riskReason = payload.string("riskReason", ""),
             telegramStatus = event.string("telegram_status", "unknown").uppercase(),
             telegramAttempts = event.int("telegram_attempts"),
             candleAt = event.string("signal_candle_at"),
@@ -277,10 +279,17 @@ fun LiveMonitoringScreen(onBackClick: () -> Unit) {
                 items(current.signals) { signal ->
                     Card {
                         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("${signal.symbol} • ${signal.action}", style = MaterialTheme.typography.titleMedium)
-                            Text("${signal.marketType} • Candle: ${signal.candleAt}")
+                            Text(
+                                "${signal.symbol} • ${if (signal.riskAccepted) "CONFIRMED SETUP" else "SETUP REJECTED"}",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (signal.riskAccepted) Color(0xFF19B978) else MaterialTheme.colorScheme.error
+                            )
+                            Text("${signal.action} • ${signal.marketType} • Candle: ${signal.candleAt}")
                             Text("Reference: ${signal.referencePrice} • Stop: ${signal.stopLoss} • Target: ${signal.takeProfit}")
-                            Text("Risk validation: ${if (signal.riskAccepted) "Accepted" else "Not approved / unavailable"}")
+                            Text("Risk validation: ${if (signal.riskAccepted) "APPROVED" else "REJECTED"}")
+                            if (!signal.riskAccepted && signal.riskReason.isNotBlank()) {
+                                Text("Reason: ${signal.riskReason}", color = MaterialTheme.colorScheme.error)
+                            }
                             Text("Telegram: ${signal.telegramStatus} • Attempts: ${signal.telegramAttempts}")
                             signal.reasons.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                         }
