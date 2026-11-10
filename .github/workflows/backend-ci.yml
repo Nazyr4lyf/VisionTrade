@@ -6,14 +6,17 @@ on:
       - main
       - feature/crypto-scalping-foundation
       - feature/live-monitoring-snapshot
+      - fix/monitoring-reliability-v5
     paths:
       - "backend/**"
+      - "supabase/**"
       - "Dockerfile"
       - "render.yaml"
       - ".github/workflows/backend-ci.yml"
   pull_request:
     paths:
       - "backend/**"
+      - "supabase/**"
       - "Dockerfile"
       - "render.yaml"
       - ".github/workflows/backend-ci.yml"
