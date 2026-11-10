@@ -1,6 +1,7 @@
 import { ScalpingStrategyEngine } from "./strategy/scalping-strategy.mjs";
 import { StopTargetEngine } from "./risk/stop-target-engine.mjs";
 import { calculateIndicators } from "./strategy/indicators.mjs";
+import { formatStrategyAlert } from "./telegram-alert.mjs";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (body, status=200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -66,28 +67,14 @@ async function mapWithConcurrency(items, limit, mapper) {
   await Promise.all(workers);
   return output;
 }
-function alertText(signal, levels) {
-  const side = signal.action === "BUY" ? "LONG" : "SHORT";
-  return [
-    "🔔 NAXYUS VISIONTRADE — STRATEGY SIGNAL",
-    signal.symbol + " | " + signal.marketType + " | " + side,
-    "Reference price: " + signal.referencePrice,
-    "Risk validation: " + (levels?.accepted ? "ACCEPTED" : "REJECTED — " + (levels?.rejectionReason || "not available")),
-    ...(levels?.accepted ? ["Candidate stop-loss: " + levels.stopLossPrice, "Candidate take-profit: " + levels.takeProfitPrice, "Gross risk/reward: " + levels.grossRiskReward.toFixed(2) + "R"] : []),
-    "",
-    "Strategy confirmations:",
-    ...signal.reasons.map(x => "• " + x),
-    "",
-    "Signal only. No exchange order has been placed. Live trading is disabled."
-  ].join("\n");
-}
+
 async function telegramSend(message) {
   const token = getEnv("TELEGRAM_BOT_TOKEN");
   const chat = getEnv("TELEGRAM_CHAT_ID");
   if (!token || !chat) return { enabled: false, sent: false };
   const res = await fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chat, text: message, disable_web_page_preview: true })
+    body: JSON.stringify({ chat_id: chat, text: message, parse_mode: "HTML", disable_web_page_preview: true })
   });
   const body = await res.json();
   if (!res.ok || body.ok !== true) throw new Error("Telegram sendMessage failed (HTTP " + res.status + ")");
@@ -109,10 +96,20 @@ async function deliverPendingAlerts(telegramEnabled) {
   for (const event of pending || []) {
     try {
       const payload = event.signal_payload || {};
-      const message = alertText({
+      const levels = payload.riskLevels || null;
+      if (!levels?.accepted) {
+        const now = new Date().toISOString();
+        await rest("visiontrade_signal_events?id=eq." + event.id, {
+          method: "PATCH", headers: { prefer: "return=minimal" },
+          body: JSON.stringify({ telegram_status: "rejected", telegram_last_error: payload.riskReason || levels?.rejectionReason || "Risk validation was not approved; alert suppressed.", updated_at: now })
+        });
+        continue;
+      }
+      const message = formatStrategyAlert({
         symbol: event.symbol, marketType: event.market_type, action: event.action,
-        referencePrice: payload.referencePrice, reasons: payload.reasons || []
-      }, payload.riskLevels || null);
+        referencePrice: payload.referencePrice, reasons: payload.reasons || [],
+        signalCandleTimestampMillis: payload.evaluatedAtMillis
+      }, levels);
       const result = await telegramSend(message);
       const now = new Date().toISOString();
       await rest("visiontrade_signal_events?id=eq." + event.id, {
@@ -181,7 +178,8 @@ Deno.serve(async (req) => {
     });
     const results = settled.filter(x => x?.status === "fulfilled").map(x => x.value);
     const failures = settled.length - results.length;
-    const actionable = results.filter(x => ["BUY", "SELL"].includes(x.signal.action));
+    const candidates = results.filter(x => ["BUY", "SELL"].includes(x.signal.action));
+    const actionable = candidates.filter(x => x.levels?.accepted === true);
     const rejectionReasons = {};
     for (const result of results) {
       if (result.signal.action === "NO_TRADE") {
@@ -192,7 +190,7 @@ Deno.serve(async (req) => {
     if (failures) rejectionReasons["SCAN_ERROR"] = failures;
 
     const now = new Date().toISOString();
-    for (const {signal,levels} of actionable) {
+    for (const {signal,levels} of candidates) {
       const candleAt = new Date(signal.signalCandleTimestampMillis).toISOString();
       const payload = {
         symbol: signal.symbol, marketType: signal.marketType, action: signal.action,
@@ -206,7 +204,8 @@ Deno.serve(async (req) => {
       await rest("visiontrade_signal_events?on_conflict=market_type,symbol,action,signal_candle_at", {
         method: "POST", headers: { prefer: "resolution=ignore-duplicates,return=minimal" },
         body: JSON.stringify([{ market_type: signal.marketType, symbol: signal.symbol, action: signal.action,
-          signal_candle_at: candleAt, signal_payload: payload }])
+          signal_candle_at: candleAt, signal_payload: payload, telegram_status: levels?.accepted ? "pending" : "rejected",
+          telegram_last_error: levels?.accepted ? null : (levels?.rejectionReason || "Risk validation was not approved.") }])
       });
     }
 
